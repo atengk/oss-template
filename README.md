@@ -1,4 +1,4 @@
-# OSS Template
+# OSS Template (Open Source Software Template)
 
 <p align="center">
   <strong>通用的 GitHub 开源项目基础模版仓库（开箱即用集成 CI/CD、Docker 与工程化规范）</strong>
@@ -20,7 +20,10 @@
 
 ## 📖 项目简介
 
-`oss-template` 是一个现代化、通用的开源项目基础骨架。旨在为后端（Java/Go/Python等）、前端（Vue/React/Node等）以及 CLI 工具提供标准化的工程规范与开箱即用的 GitHub 自动化流水线。
+> 💡 **名词释义**：
+> **OSS** 是 **Open Source Software（开源软件 / 开源项目）** 的国际通用缩写（⚠️ 注意：并非云厂商的“对象存储服务”）。
+> `oss-template` 旨在为后端（Java/Go/Python等）、前端（Vue/React/Node等）以及 CLI 工具提供标准化的现代开源工程底座与开箱即用的 GitHub 自动化流水线。
+
 
 ---
 
