@@ -170,3 +170,62 @@ jobs:
 #         labels: ${{ steps.meta.outputs.labels }}
 #         cache-from: type=gha
 #         cache-to: type=gha,mode=max
+#
+# 5. 构建并分发 Go 语言跨平台二进制 CLI 工具 (GoReleaser)
+# ------------------------------------------------------------------------------
+# publish-go-binaries:
+#   name: 跨平台二进制构建 (GoReleaser)
+#   needs: github-release
+#   runs-on: ubuntu-latest
+#   permissions:
+#     contents: write # 上传二进制附件至 Release 所需权限
+#   steps:
+#     - name: 检出代码
+#       uses: actions/checkout@v4
+#       with:
+#         fetch-depth: 0
+#     - name: 安装 Go
+#       uses: actions/setup-go@v5
+#       with:
+#         go-version: '1.22'
+#     - name: 运行 GoReleaser (自动交叉编译全平台二进制与 Checksums)
+#       uses: goreleaser/goreleaser-action@v5
+#       with:
+#         distribution: goreleaser
+#         version: latest
+#         args: release --clean
+#       env:
+#         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#
+# 6. 自动部署前端应用或静态文档至 GitHub Pages
+# ------------------------------------------------------------------------------
+# deploy-pages:
+#   name: 部署至 GitHub Pages
+#   needs: github-release
+#   runs-on: ubuntu-latest
+#   permissions:
+#     contents: read
+#     pages: write      # 部署 GitHub Pages 所需权限
+#     id-token: write   # 身份校验所需权限
+#   environment:
+#     name: github-pages
+#     url: ${{ steps.deployment.outputs.page_url }}
+#   steps:
+#     - name: 检出代码
+#       uses: actions/checkout@v4
+#     - name: 安装 Node.js
+#       uses: actions/setup-node@v4
+#       with:
+#         node-version: 20
+#     - name: 构建前端产物
+#       run: |
+#         pnpm install
+#         pnpm build # 确保产物输出至 dist 目录
+#     - name: 上传 Pages 产物
+#       uses: actions/upload-pages-artifact@v3
+#       with:
+#         path: 'dist'
+#     - name: 部署至 GitHub Pages
+#       id: deployment
+#       uses: actions/deploy-pages@v4
+

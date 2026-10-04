@@ -84,4 +84,7 @@
 - **PyPI**: 推荐使用官方 [PyPI Trusted Publisher (OIDC)](https://docs.pypi.org/trusted-publishers/)，免配静态密钥；
 - **Docker 镜像**:
   - **GHCR (推荐)**: 默认直接使用系统内置 `GITHUB_TOKEN`，零 Secret 配置；
-  - **Docker Hub**: 配置 `DOCKERHUB_USERNAME` 与 `DOCKERHUB_TOKEN`。
+  - **Docker Hub**: 配置 `DOCKERHUB_USERNAME` 与 `DOCKERHUB_TOKEN`；
+- **Go 二进制工具 (GoReleaser)**: 默认直接使用系统内置 `GITHUB_TOKEN` 上传附件至 Release，零 Secret 配置；
+- **GitHub Pages (前端/文档)**: 默认使用官方工作流部署，仅需在仓库 **Settings -> Pages -> Build and deployment -> Source** 切换为 **GitHub Actions** 即可。
+
