@@ -171,6 +171,7 @@ jobs:
 #         platforms: linux/amd64,linux/arm64
 #         tags: ${{ steps.meta.outputs.tags }}
 #         labels: ${{ steps.meta.outputs.labels }}
+#         provenance: false # 避免生成 unknown/unknown 幽灵标签，兼容老旧 Docker 与私有 Registry 环境
 #         cache-from: type=gha
 #         cache-to: type=gha,mode=max
 #
