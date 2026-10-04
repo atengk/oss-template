@@ -37,7 +37,9 @@
 ## 🛠️ 快速开始：基于本模版初始化新项目
 
 ### 1. 使用模版创建仓库
-在 GitHub 仓库首页点击绿色的 **「Use this template」 -> 「Create a new repository」** 创建你的新项目仓库。
+在 GitHub 仓库首页点击绿色的 **「Use this template」 -> 「Create a new repository」** 创建你的新项目仓库，或直接点击下方快捷入口：
+
+> 🚀 **[点击一键基于本模版创建新仓库 (One-Click Generate)](https://github.com/atengk/oss-template/generate)**
 
 ### 2. 全局替换占位符
 将新仓库克隆到本地后，在 IDE 中全局搜索并替换以下占位符：
@@ -81,7 +83,8 @@ GitHub Actions 将会自动执行 [`.github/workflows/release.yml`](./.github/wo
 4. 分发至官方中心仓库（若配置了 Maven / npm / PyPI / Docker 等发布 Job）。
 
 > 💡 **版本更新日志 (Changelog)**：
-> 每一个正式版本的详细变动明细、关联 Issue 与贡献者致谢均由系统自动维护，可直接前往 [GitHub Releases](https://github.com/{{GITHUB_USERNAME}}/{{PROJECT_NAME}}/releases) 查看最新记录。
+> 每一个正式版本的详细变动明细、关联 Issue 与贡献者致谢均由系统自动维护，可直接前往 [GitHub Releases](https://github.com/atengk/oss-template/releases) 查看最新记录。
+
 
 
 ---
