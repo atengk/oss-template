@@ -101,6 +101,7 @@ GitHub Actions 将会自动执行 [`.github/workflows/release.yml`](./.github/wo
 │   │   ├── ci.yml                  # 业务构建测试（含 PR 标题规范校验）
 │   │   └── release.yml             # 自动化发版、生成更新日志与分发流水线（含 Docker/Maven/npm/PyPI）
 │   └── PULL_REQUEST_TEMPLATE.md    # Pull Request 提交模版
+├── .cliff.toml                     # git-cliff 变更日志提取与分类配置
 ├── .dockerignore                   # Docker 镜像构建上下文忽略配置
 ├── .editorconfig                   # 跨编辑器编码与缩进规范
 ├── .gitattributes                  # 跨平台换行符归一化配置 (强制 LF)

@@ -28,11 +28,19 @@ jobs:
       #     mkdir -p dist
       #     tar -czf dist/release-assets.tar.gz README.md LICENSE
 
-      - name: 创建 GitHub Release 并自动生成变更日志
+      - name: 生成发布日志 (基于 Commit 与 PR)
+        uses: orhun/git-cliff-action@v4
+        id: git-cliff
+        with:
+          config: .cliff.toml
+          args: --latest --strip header
+        env:
+          OUTPUT: CHANGELOG_RELEASE.md
+
+      - name: 创建 GitHub Release 并挂载发布内容
         uses: softprops/action-gh-release@v2
         with:
-          # 利用 GitHub 官方原生能力，自动根据此版本包含的 PR/Commit 与贡献者生成格式化日志
-          generate_release_notes: true
+          body: ${{ steps.git-cliff.outputs.content }}
           draft: false
           prerelease: false
           # 如需随 Release 挂载可供直接下载的安装包/二进制文件，解除下方注释并配置产物路径
@@ -41,6 +49,7 @@ jobs:
           #   target/*.jar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 
 # ==============================================================================
 # 官方中心仓库发布扩展配置参考（按需复制到下方新增 Job 或解除注释使用）
