@@ -73,7 +73,7 @@
 3. **自动化流水线**：
    - 自动生成格式化的 GitHub Release 发布笔记（包含该版本所有特性、修复与贡献者名单）；
    - 自动挂载打包物至 Release 附件；
-   - 如已配置官方中心仓库（npm / Maven / PyPI），将自动触发分发。
+   - 如已配置中心仓库或分发平台（npm / Maven / PyPI / Docker / GoReleaser / Pages），将自动触发分发。
 
 ### 中心仓库发布凭据 (Secrets) 参考
 

@@ -31,7 +31,7 @@
 
 - 🎯 **技术栈纯净解耦**：无侵入式设计，不绑定任何特定语言运行时，保留统一的工程底座；
 - 🚀 **自动化发版流水线**：打 Tag（如 `v1.0.0`）自动触发发版、自动提取 PR/Commit 生成精美更新日志、自动挂载打包物附件；
-- 📦 **包管理器与容器分发预备**：内置 Maven Central、npmjs、PyPI 及 Docker (GHCR / Docker Hub) 等中心仓库分发流水线参考与凭据规范；
+- 📦 **全场景分发体系预备**：内置 Maven Central、npmjs、PyPI、Docker (GHCR) 以及 GoReleaser (CLI) 与 GitHub Pages (前端/文档) 等 6 大分发流水线参考与凭据规范；
 - 🛡️ **规范化工作流**：支持 Conventional Commits 提交规范、预置结构化 Issue 反馈与标准 PR 审查模版；
 - 🧹 **极简整洁**：全仓库仅保留必需的核心文件，无冗余配置与环境负担。
 
@@ -83,7 +83,7 @@ GitHub Actions 将会自动执行 [`.github/workflows/release.yml`](./.github/wo
 1. 提取自上一版本以来的全部合并 PR 与提交记录；
 2. 自动生成 GitHub Release 详情并归类贡献者；
 3. 将打包产物自动挂载至 Release 页面附件（若配置了构建步骤）；
-4. 分发至官方中心仓库（若配置了 Maven / npm / PyPI / Docker 等发布 Job）。
+4. 分发至官方中心仓库或平台（若配置了 Maven / npm / PyPI / Docker / GoReleaser / Pages 等发布 Job）。
 
 > 💡 **版本更新日志 (Changelog)**：
 > 每一个正式版本的详细变动明细、关联 Issue 与贡献者致谢均由系统自动维护，可直接前往 [GitHub Releases](https://github.com/atengk/oss-template/releases) 查看最新记录。
@@ -102,12 +102,13 @@ GitHub Actions 将会自动执行 [`.github/workflows/release.yml`](./.github/wo
 │   │   └── feature_request.md      # 新特性建议模版
 │   ├── workflows/
 │   │   ├── ci.yml                  # 业务构建测试（含 PR 标题规范校验）
-│   │   └── release.yml             # 自动化发版、生成更新日志与分发流水线（含 Docker/Maven/npm/PyPI）
+│   │   └── release.yml             # 自动化发版、生成更新日志与分发流水线（含 6 大场景分发参考）
 │   └── PULL_REQUEST_TEMPLATE.md    # Pull Request 提交模版
 ├── .cliff.toml                     # git-cliff 变更日志提取与分类配置
 ├── .dockerignore                   # Docker 镜像构建上下文忽略配置
 ├── .editorconfig                   # 跨编辑器编码与缩进规范
 ├── .gitattributes                  # 跨平台换行符归一化配置 (强制 LF)
+
 ├── .gitignore                      # 跨语言通用忽略配置
 ├── CONTRIBUTING.md                 # 贡献指南与 Commit 提交规范
 ├── LICENSE                         # 开源许可证 (Apache-2.0)
