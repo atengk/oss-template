@@ -27,8 +27,8 @@ jobs:
       #   run: |
       #     mkdir -p dist
       #     tar -czf dist/release-assets.tar.gz README.md LICENSE
-      #     # 自动为 dist 目录下所有打包文件生成 SHA-256 校验和清单，防止文件被篡改
-      #     cd dist && sha256sum * > checksums.txt
+      #     # 自动为 dist 目录下所有文件生成 SHA-256 校验清单（排除 checksums 自身，防自污染报错）
+      #     cd dist && sha256sum $(ls -1 | grep -v '^checksums\.txt$') > checksums.txt
 
       - name: 生成发布日志 (基于 Commit 与 PR)
         uses: orhun/git-cliff-action@v4

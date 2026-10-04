@@ -83,7 +83,7 @@ git push origin v1.0.0
 GitHub Actions 将会自动执行 [`.github/workflows/release.yml`](./.github/workflows/release.yml)：
 1. 提取自上一版本以来的全部合并 PR 与提交记录；
 2. 自动生成 GitHub Release 详情并归类贡献者；
-3. 将打包产物自动挂载至 Release 页面附件（若配置了构建步骤）；
+3. 将打包产物与 `checksums.txt` 安全校验清单自动挂载至 Release 页面附件（若配置了构建步骤）；
 4. 分发至官方中心仓库或平台（若配置了 Maven / npm / PyPI / Docker / GoReleaser / Pages 等发布 Job）。
 
 > 💡 **版本更新日志 (Changelog)**：

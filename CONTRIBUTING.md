@@ -104,6 +104,12 @@ git push origin v1.0.0
 - 将打包产物与 `checksums.txt` 挂载至附件（若配置了构建步骤）；
 - 分发至官方中心仓库或平台（若配置了对应发布 Job）。
 
+> 💡 **安全校验和 (SHA-256 Checksums) 验证指引**：
+> 下游用户或测试者下载产物与 `checksums.txt` 后，可在终端通过原生命令一键验证文件完整性：
+> - **Linux**：`sha256sum -c checksums.txt --ignore-missing`
+> - **macOS**：`shasum -a 256 -c checksums.txt`
+> - **Windows (PowerShell)**：`Get-FileHash .\your-asset-file.tar.gz -Algorithm SHA256`
+
 ### 中心仓库发布凭据 (Secrets) 参考
 
 如需发布至官方包管理仓库，请在仓库的 **Settings -> Secrets and variables -> Actions** 中配置对应凭证：
