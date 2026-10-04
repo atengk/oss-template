@@ -48,32 +48,61 @@
 | `chore` | 其他琐碎杂项（不改动源码与测试） | `chore: 更新 .gitignore 忽略规则` |
 | `revert` | 恢复或回滚此前的某次历史提交 | `revert: feat(auth): 回退登录授权变动` |
 
-
 ---
 
 ## 3. Pull Request 流程
 
-- 发起 PR 时，请按模版完整填写变更背景、解决的问题以及关联的 Issue（如 `close #12`）；
-- 确保 CI 流水线测试全部处于通过（绿灯）状态；
-- 代码审查（Code Review）提出修改意见后，在原分支继续提交即可自动同步至 PR；
-- PR 合并后，特性分支将被删除。
+- **PR 标题规范**：PR 标题必须同样遵循 [Conventional Commits](#2-commit-提交信息规范) 格式（如 `feat: 新增能力` 或 `fix: 修复缺陷`），CI 会对其进行自动化合规校验；
+- **模版填写**：发起 PR 时，请按模版完整填写变更背景、解决的问题以及关联的 Issue（如 `close #12`）；
+- **CI 绿灯**：确保 CI 流水线测试全部处于通过状态；
+- **审查与合并**：代码审查（Code Review）提出修改意见后，在原分支继续提交即可自动同步至 PR；合并后特性分支将被删除。
 
 ---
 
 ## 4. 版本发版机制与发布说明
 
-本项目通过 GitHub Actions 实现了自动化发版体系：
+本项目通过 GitHub Actions 实现了自动化发版体系。正式发版标准流程如下：
 
-1. **日常归纳**：合并至 `main` 分支的 PR 会由 GitHub 自动纳入发布日志统计；
-2. **触发发版**：当需要正式发布新版本时，仅需打上符合语义化版本规范的 Git Tag 并推送：
-   ```bash
-   git tag v1.0.0
-   git push origin v1.0.0
-   ```
-3. **自动化流水线**：
-   - 自动生成格式化的 GitHub Release 发布笔记（包含该版本所有特性、修复与贡献者名单）；
-   - 自动挂载打包物至 Release 附件；
-   - 如已配置中心仓库或分发平台（npm / Maven / PyPI / Docker / GoReleaser / Pages），将自动触发分发。
+### 1. 日常提交与日志归纳
+平时向 `main` 分支提交代码或合并 PR 时，规范的提交记录（Conventional Commits）会被 `git-cliff` 自动追踪，并在发版时聚合生成更新日志。
+
+### 2. 同步项目版本号（前置可选）
+发版前若涉及项目自身版本号递增，**严禁使用文本正则全局替换**（极易误伤同名第三方依赖版本）。推荐采用各生态官方原生命令或单一真实信源（SSOT）架构：
+
+| 技术栈 / 生态 | 推荐方式 / 原生命令 | 说明 |
+| :--- | :--- | :--- |
+| **Java (Maven)** | `mvn versions:set -DnewVersion=1.2.0 -DgenerateBackupPoms=false` | 递归同步父工程与所有子模块 `pom.xml`，零误伤第三方依赖 |
+| **Java (Maven 推荐)** | 父 POM 配置 `<properties><revision>1.2.0</revision></properties>` | 官方 CI-Friendly 规范，全工程仅需在父 POM 维护这 1 行 |
+| **Java (Gradle)** | 在 `gradle.properties` 中维护单一变量 `version=1.2.0` | 单一真实信源，多子模块自动继承 |
+| **Node.js (npm / pnpm)** | `npm version 1.2.0` 或 `pnpm version 1.2.0` | 自动同步 `package.json` 与对应 lockfile（默认自动建 Tag） |
+| **前端通用 (跨包管理器)** | `npx bumpp` | 自动探测 npm/yarn/pnpm，交互式选择版本并同步 lockfile |
+| **Python** | `poetry version patch` (或使用 `bump-my-version`) | 自动安全递增 `pyproject.toml` 中的版本号 |
+| **Go 语言** | 无需操作 | Go 模块原生完全基于 Git Tag，源码零版本配置文件 |
+| **Rust** | `cargo set-version 1.2.0` (或使用 `cargo-release`) | 官方子命令，安全递增 `Cargo.toml` 及其工作区版本 |
+
+> 💡 *若使用原生命令（非 `npm version` / `bumpp`）修改了版本文件，请先在本地提交：`git commit -am "chore(release): v1.2.0"`*
+
+### 3. 打标签并推送到远端（触发发版）
+当本地代码与版本准备就绪后，推送标签至 GitHub 即可触发发版流水线：
+
+```bash
+# 步骤 A：确保本地最新代码已推送到 main 分支
+git push origin main
+
+# 步骤 B：打版本标签并推送到 GitHub (支持 v1.0.0, v1.0.0-beta.1 等)
+git tag v1.0.0
+git push origin v1.0.0
+
+# 或使用联合命令一键推送分支与标签
+# git push origin main --tags
+```
+
+### 4. 自动化流水线运行
+标签推送后，GitHub Actions 将会自动执行 [`.github/workflows/release.yml`](./.github/workflows/release.yml)：
+- 自动提取自上一版本以来的全部提交与 PR，由 `git-cliff` 格式化为发布日志；
+- 自动创建 GitHub Release 并挂载发布内容；
+- 将打包产物与 `checksums.txt` 挂载至附件（若配置了构建步骤）；
+- 分发至官方中心仓库或平台（若配置了对应发布 Job）。
 
 ### 中心仓库发布凭据 (Secrets) 参考
 
