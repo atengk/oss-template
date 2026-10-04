@@ -27,7 +27,6 @@
 > **OSS** 是 **Open Source Software（开源软件 / 开源项目）** 的国际通用缩写（⚠️ 注意：并非云厂商的“对象存储服务”）。
 > `oss-template` 旨在为后端（Java/Go/Python等）、前端（Vue/React/Node等）以及 CLI 工具提供标准化的现代开源工程底座与开箱即用的 GitHub 自动化流水线。
 
-
 ---
 
 ## ✨ 核心特性
@@ -91,8 +90,6 @@ GitHub Actions 将会自动执行 [`.github/workflows/release.yml`](./.github/wo
 > 💡 **版本更新日志 (Changelog)**：
 > 每一个正式版本的详细变动明细、关联 Issue 与贡献者致谢均由系统自动维护，可直接前往 [GitHub Releases](https://github.com/atengk/oss-template/releases) 查看最新记录。
 
-
-
 ---
 
 ## 📂 仓库目录结构
@@ -111,13 +108,11 @@ GitHub Actions 将会自动执行 [`.github/workflows/release.yml`](./.github/wo
 ├── .dockerignore                   # Docker 镜像构建上下文忽略配置
 ├── .editorconfig                   # 跨编辑器编码与缩进规范
 ├── .gitattributes                  # 跨平台换行符归一化配置 (强制 LF)
-
 ├── .gitignore                      # 跨语言通用忽略配置
 ├── CONTRIBUTING.md                 # 贡献指南与 Commit 提交规范
 ├── LICENSE                         # 开源许可证 (Apache-2.0)
 └── README.md                       # 项目主文档
 ```
-
 
 ---
 
