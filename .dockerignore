@@ -9,10 +9,6 @@
 .gitignore
 .dockerignore
 
-# 文档与元数据
-*.md
-LICENSE
-
 # 操作系统与 IDE
 .DS_Store
 Thumbs.db
