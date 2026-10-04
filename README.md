@@ -46,16 +46,15 @@
 
 > 🚀 **[点击一键基于本模版创建新仓库 (One-Click Generate)](https://github.com/atengk/oss-template/generate)**
 
-### 2. 全局替换占位符
-将新仓库克隆到本地后，在 IDE 中全局搜索并替换以下占位符：
+### 2. 全局替换模版默认信息
+克隆新仓库到本地后，在 IDE 中全局搜索以下默认值并批量替换为你自己的项目信息：
 
-| 占位符 | 说明 | 示例 |
-| :--- | :--- | :--- |
-| `{{PROJECT_NAME}}` | 新项目名称 | `my-awesome-tool` |
-| `{{PROJECT_DESCRIPTION}}` | 项目一句话中文描述 | `高性能分布式任务调度组件` |
-| `{{GITHUB_USERNAME}}` | 你的 GitHub 用户名或组织名 | `Ateng` |
-| `{{AUTHOR_NAME}}` | 作者称谓 | `Ateng` |
-| `{{CURRENT_YEAR}}` | 当前年份 | `2026` |
+| 搜索内容（当前默认值） | 替换为你自己的内容 | 说明 | 示例 |
+| :--- | :--- | :--- | :--- |
+| `atengk/oss-template` | `your-username/your-repo` | 仓库全路径（更新 Badge 徽标与链接） | `my-org/my-awesome-tool` |
+| `atengk` | `your-username` | 你的 GitHub 用户名或组织名 | `my-org` |
+| `oss-template` | `your-repo` | 你的新项目仓库名称 | `my-awesome-tool` |
+| `Ateng` | `Your Name` | 作者称谓 / 版权所有者 | `Zhang San` |
 
 ### 3. 配置业务构建与测试插槽
 打开 [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)，找到对应的技术栈区域（Node.js / Java / Go / Python），解除对应步骤的注释并填入你的构建/测试命令即可。

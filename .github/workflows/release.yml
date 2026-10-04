@@ -44,7 +44,8 @@ jobs:
         with:
           body: ${{ steps.git-cliff.outputs.content }}
           draft: false
-          prerelease: false
+          # 自动识别语义化版本连字符（如 v1.0.0-beta.1 / v1.0.0-rc.1 自动打上 Pre-release 标签）
+          prerelease: ${{ contains(github.ref_name, '-') }}
           # 如需随 Release 挂载可供直接下载的安装包/二进制文件与校验清单，解除下方注释并配置产物路径
           # files: |
           #   dist/*.tar.gz
@@ -172,6 +173,7 @@ jobs:
 #         tags: ${{ steps.meta.outputs.tags }}
 #         labels: ${{ steps.meta.outputs.labels }}
 #         provenance: false # 避免生成 unknown/unknown 幽灵标签，兼容老旧 Docker 与私有 Registry 环境
+#         sbom: false       # 避免生成附加 SBOM attestation，保持产物纯净最大化兼容
 #         cache-from: type=gha
 #         cache-to: type=gha,mode=max
 #
