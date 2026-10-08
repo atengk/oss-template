@@ -32,10 +32,10 @@
 ## ✨ 核心特性
 
 - 🎯 **技术栈纯净解耦**：无侵入式设计，不绑定任何特定语言运行时，保留统一的工程底座；
-- 🚀 **自动化发版流水线**：打 Tag（如 `v1.0.0`）自动触发发版、自动提取 PR/Commit 生成精美更新日志、自动挂载打包物附件；
+- 🚀 **双通道自动化发版体系**：支持本地脚本驱动与云端网页调度（`workflow_dispatch`），打 Tag 自动触发发版、自动提取 PR/Commit 生成精美更新日志、自动挂载打包物附件；
+- 🛡️ **发版防呆与规范化助手**：内置全生命周期发版防呆脚本 `scripts/release.sh`（具备 5 大前置自检、版本号推导与 `--dry-run` 演练模式）及交互式提交助手 `scripts/commit.sh`；
 - 📦 **全场景分发体系预备**：内置 Maven Central、npmjs、PyPI、Docker (GHCR) 以及 GoReleaser (CLI) 与 GitHub Pages (前端/文档) 等 6 大分发流水线参考与凭据规范；
-- 🛡️ **规范化工作流**：支持 Conventional Commits 提交规范、预置结构化 Issue 反馈与标准 PR 审查模版；
-- 🧹 **极简整洁**：全仓库仅保留必需的核心文件，无冗余配置与环境负担。
+- 🧹 **极简整洁**：全仓库仅保留必需的核心工程规范与脚本，无冗余配置与第三方运行时负担。
 
 ---
 
@@ -68,17 +68,27 @@ GitHub 新建仓库默认的 Actions 权限为只读。为确保发版流水线�
 
 ## 🚀 版本发版与发布指南
 
-当项目准备发布新版本时，无需手动在网页编写 Release 笔记，只需在本地推送一个语义化版本号的 Git Tag：
+本项目支持**双通道自动化发版**，无需手动在网页编辑 Release 笔记：
+
+### 推荐：使用本地发版防呆脚本
+通过内置脚本进行自动化前置自检（分支合规、工作区清洁度、远端同步状态与 Tag 重名检测），并智能推导下一个语义化版本：
 
 ```bash
-# 1. 确保本地 main 分支代码最新且 CI 绿灯通过
-git checkout main
-git pull origin main
+# 1. 安全演练模式（强烈推荐：仅检查和预览拟执行命令，零污染 Git 历史）
+bash scripts/release.sh --dry-run
 
-# 2. 打标签并推送到 GitHub (支持 v1.0.0, v1.0.0-beta.1 等)
-git tag v1.0.0
-git push origin v1.0.0
+# 2. 交互式发版向导（自动推导 Patch / Minor / Major 版本或自定义输入）
+bash scripts/release.sh
+
+# 3. 指定版本号快速发版
+bash scripts/release.sh v1.0.0
 ```
+
+> 💡 **云端与原生替代方案**：
+> - **云端网页触发**：访问仓库 **Actions -> Release -> Run workflow**，输入版本号即可一键自动打标并发版；
+> - **原生 Git 命令**：确保工作区干净后直接运行 `git tag -a v1.0.0 -m "Release v1.0.0" && git push origin v1.0.0`。
+> 
+> 更多多语言版本文件递增（Maven/npm/Cargo/Poetry 等）配置说明，请参阅 [贡献指南 (CONTRIBUTING.md)](./CONTRIBUTING.md#4-版本发版机制与发布说明)。
 
 GitHub Actions 将会自动执行 [`.github/workflows/release.yml`](./.github/workflows/release.yml)：
 1. 提取自上一版本以来的全部合并 PR 与提交记录；
@@ -100,9 +110,12 @@ GitHub Actions 将会自动执行 [`.github/workflows/release.yml`](./.github/wo
 │   │   ├── bug_report.md           # Bug 缺陷反馈模版
 │   │   └── feature_request.md      # 新特性建议模版
 │   ├── workflows/
-│   │   ├── ci.yml                  # 业务构建测试（含 PR 标题规范校验）
-│   │   └── release.yml             # 自动化发版、生成更新日志与分发流水线（含 6 大场景分发参考）
+│   │   ├── ci.yml                  # 业务构建测试（含 PR 标题规范校验与脚本语法守门）
+│   │   └── release.yml             # 自动化发版、生成更新日志与分发流水线（含双通道发版与 6 大场景分发参考）
 │   └── PULL_REQUEST_TEMPLATE.md    # Pull Request 提交模版
+├── scripts/
+│   ├── commit.sh                   # 交互式 Conventional Commits 规范化提交助手
+│   └── release.sh                  # 全生命周期发版防呆脚本 (含 Pre-flight 自检、演练模式与生态插槽)
 ├── .cliff.toml                     # git-cliff 变更日志提取与分类配置
 ├── .dockerignore                   # Docker 镜像构建上下文忽略配置
 ├── .editorconfig                   # 跨编辑器编码与缩进规范

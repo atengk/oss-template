@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: '发布版本号 (必须以 v 开头，符合 SemVer 规范，如 v1.0.0 或 v1.0.0-rc.1)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -13,12 +18,51 @@ jobs:
   github-release:
     name: 自动发版与产物挂载
     runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.release-meta.outputs.tag_name }}
+      is_prerelease: ${{ steps.release-meta.outputs.is_prerelease }}
 
     steps:
       - name: 检出源码
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: 解析与校验发版版本号 (Resolve & Validate Release Version)
+        id: release-meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG_NAME="${{ inputs.version }}"
+            # 自动补全前缀 v
+            if [[ "$TAG_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+              TAG_NAME="v$TAG_NAME"
+            fi
+            # 语义化版本正则校验
+            if ! echo "$TAG_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
+              echo "::error::版本号 [$TAG_NAME] 不符合语义化版本规范！必须形如 v1.0.0 或 v1.0.0-rc.1"
+              exit 1
+            fi
+            # 校验远端是否已存在同名 Tag
+            if git ls-remote --tags origin "refs/tags/$TAG_NAME" | grep -q "$TAG_NAME"; then
+              echo "::error::远程仓库已存在相同标签 [$TAG_NAME]，禁止重复发版！"
+              exit 1
+            fi
+            # 在当前提交显式创建附注 Tag 并推送到 GitHub 远端
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
+            git push origin "$TAG_NAME"
+            echo "已由 GitHub Actions 显式创建并推送标签: $TAG_NAME"
+          else
+            TAG_NAME="${{ github.ref_name }}"
+          fi
+
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          if [[ "$TAG_NAME" =~ - ]]; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
 
       # ------------------------------------------------------------------------
       # 打包构建插槽（如有打包产物需上传至 Release 附件，在此处编译并计算校验和）
@@ -35,17 +79,19 @@ jobs:
         id: git-cliff
         with:
           config: .cliff.toml
-          args: --latest --strip header
+          args: --tag ${{ steps.release-meta.outputs.tag_name }} --strip header
         env:
           OUTPUT: CHANGELOG_RELEASE.md
 
       - name: 创建 GitHub Release 并挂载发布内容
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.release-meta.outputs.tag_name }}
+          name: ${{ steps.release-meta.outputs.tag_name }}
           body: ${{ steps.git-cliff.outputs.content }}
           draft: false
           # 自动识别语义化版本连字符（如 v1.0.0-beta.1 / v1.0.0-rc.1 自动打上 Pre-release 标签）
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ steps.release-meta.outputs.is_prerelease == 'true' }}
           # 如需随 Release 挂载可供直接下载的安装包/二进制文件与校验清单，解除下方注释并配置产物路径
           # files: |
           #   dist/*.tar.gz
@@ -53,6 +99,7 @@ jobs:
           #   target/*.jar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 
 
 # ==============================================================================

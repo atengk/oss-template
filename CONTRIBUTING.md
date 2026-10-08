@@ -48,6 +48,17 @@
 | `chore` | 其他琐碎杂项（不改动源码与测试） | `chore: 更新 .gitignore 忽略规则` |
 | `revert` | 恢复或回滚此前的某次历史提交 | `revert: feat(auth): 回退登录授权变动` |
 
+### 💡 推荐：使用交互式规范化提交助手
+
+本项目内置了 POSIX Bash 编写的提交助手 [scripts/commit.sh](./scripts/commit.sh)，通过编号菜单引导选择类型、输入范围与描述，自动组装符合规范的提交信息并支持一键推送：
+
+```bash
+# 在 Linux / macOS 或 Windows Git Bash 中直接运行
+bash scripts/commit.sh
+```
+
+> 💡 **Windows 终端提示**：无论使用 PowerShell 还是 CMD，只要系统安装了 Git，直接输入 `bash scripts/commit.sh` 即可调用 Git Bash 解释器顺畅执行。
+
 ---
 
 ## 3. Pull Request 流程
@@ -61,41 +72,62 @@
 
 ## 4. 版本发版机制与发布说明
 
-本项目通过 GitHub Actions 实现了自动化发版体系。正式发版标准流程如下：
+本项目通过 GitHub Actions 实现了现代化的**双通道自动化发版体系**：
+- **通道一（推荐首选）**：使用内置发版防呆脚本 `scripts/release.sh`，在本地完成严格前置自检（Pre-flight）、语义化版本推导、可插拔版本递增插槽与附注 Tag 推送；
+- **通道二（云端调度）**：在 GitHub 仓库 Actions 界面通过 `workflow_dispatch` 手动输入版本号一键触发发版；
+- **通道三（原生 Git）**：在本地通过原生 `git tag` & `git push` 命令触发。
 
-### 1. 日常提交与日志归纳
-平时向 `main` 分支提交代码或合并 PR 时，规范的提交记录（Conventional Commits）会被 `git-cliff` 自动追踪，并在发版时聚合生成更新日志。
+---
 
-### 2. 同步项目版本号（前置可选）
-发版前若涉及项目自身版本号递增，**严禁使用文本正则全局替换**（极易误伤同名第三方依赖版本）。推荐采用各生态官方原生命令或单一真实信源（SSOT）架构：
+### 🚀 方式一：使用本地发版防呆脚本（推荐首选）
 
-| 技术栈 / 生态 | 推荐方式 / 原生命令 | 说明 |
-| :--- | :--- | :--- |
-| **Java (Maven)** | `mvn versions:set -DnewVersion=1.2.0 -DgenerateBackupPoms=false` | 递归同步父工程与所有子模块 `pom.xml`，零误伤第三方依赖 |
-| **Java (Maven 推荐)** | 父 POM 配置 `<properties><revision>1.2.0</revision></properties>` | 官方 CI-Friendly 规范，全工程仅需在父 POM 维护这 1 行 |
-| **Java (Gradle)** | 在 `gradle.properties` 中维护单一变量 `version=1.2.0` | 单一真实信源，多子模块自动继承 |
-| **Node.js (npm / pnpm)** | `npm version 1.2.0` 或 `pnpm version 1.2.0` | 自动同步 `package.json` 与对应 lockfile（默认自动建 Tag） |
-| **前端通用 (跨包管理器)** | `npx bumpp` | 自动探测 npm/yarn/pnpm，交互式选择版本并同步 lockfile |
-| **Python** | `poetry version patch` (或使用 `bump-my-version`) | 自动安全递增 `pyproject.toml` 中的版本号 |
-| **Go 语言** | 无需操作 | Go 模块原生完全基于 Git Tag，源码零版本配置文件 |
-| **Rust** | `cargo set-version 1.2.0` (或使用 `cargo-release`) | 官方子命令，安全递增 `Cargo.toml` 及其工作区版本 |
-
-> 💡 *若使用原生命令（非 `npm version` / `bumpp`）修改了版本文件，请先在本地提交：`git commit -am "chore(release): v1.2.0"`*
-
-### 3. 打标签并推送到远端（触发发版）
-当本地代码与版本准备就绪后，推送标签至 GitHub 即可触发发版流水线：
+项目提供了具备 5 重前置防呆自检的 POSIX Bash 发版脚本 [scripts/release.sh](./scripts/release.sh)。它能够自动校验当前是否处于 `main` 主干分支、工作区是否干净无未提交代码、本地是否已拉取远端最新提交、目标 Tag 是否重名冲突，并智能推导下一个语义化版本（Patch/Minor/Major）：
 
 ```bash
-# 步骤 A：确保本地最新代码已推送到 main 分支
+# 1. 安全演练模式（强烈推荐在正式发版前演练，只检查并打印拟执行动作，零污染 Git 历史）
+bash scripts/release.sh --dry-run
+
+# 2. 交互式发版（自动提取最新 Tag，交互引导选择 Patch / Minor / Major 或自定义输入）
+bash scripts/release.sh
+
+# 3. 指定版本号快速发版（直接传入合规的目标版本号参数）
+bash scripts/release.sh v1.0.0
+```
+
+> 💡 **Windows 终端提示**：无论使用 PowerShell 还是 CMD，只要系统安装了 Git，直接输入 `bash scripts/release.sh` 即可调用 Git Bash 解释器顺畅执行。
+>
+> 🧩 **多语言工程版本文件递增（扩展插槽）**：
+> 若你的具体项目需要在打 Tag 时同步更新工程元数据文件中的版本号（如 `pom.xml`、`package.json`、`Cargo.toml` 等），只需打开 [scripts/release.sh](./scripts/release.sh)，在顶部的 `custom_bump_version()` 函数插槽中解除对应语言的一行命令注释即可。脚本在自检通过后会自动调用该命令、创建 `chore(release): bump version to ...` 提交并自动推送到主干分支。
+
+---
+
+### 🌐 方式二：GitHub Actions 网页端云端调度发版 (workflow_dispatch)
+
+若维护者未在本地配置终端发版环境，可直接在 GitHub 网页端一键触发：
+1. 前往 GitHub 仓库页面，点击顶部 **Actions** 标签页；
+2. 在左侧选择 **Release** 流水线；
+3. 点击右侧蓝色的 **Run workflow** 下拉按钮；
+4. 在 **发布版本号** 输入框中填入目标版本号（如 `v1.2.0`）；
+5. 点击绿色 **Run workflow** 按钮启动流水线。
+GitHub Actions 将自动执行版本格式校验、在 `main` 当前提交显式创建并推送附注 Git Tag，随后自动提取日志完成 Release 发布。发布完成后，你在本地执行 `git fetch --tags` 即可无缝同步远端 Tag。
+
+---
+
+### 🛠️ 方式三：原生 Git 命令行手动打标触发
+
+若偏好纯手动敲命令，可按照标准步骤在本地打标并推送：
+
+```bash
+# 步骤 A：确保本地最新代码已推送到 main 分支且工作区干净
+git checkout main
+git pull origin main
 git push origin main
 
-# 步骤 B：打版本标签并推送到 GitHub (支持 v1.0.0, v1.0.0-beta.1 等)
-git tag v1.0.0
+# 步骤 B：打附注版本标签并推送到 GitHub (支持 v1.0.0, v1.0.0-beta.1 等)
+git tag -a v1.0.0 -m "Release v1.0.0"
 git push origin v1.0.0
-
-# 或使用联合命令一键推送分支与标签
-# git push origin main --tags
 ```
+
 
 ### 4. 自动化流水线运行
 标签推送后，GitHub Actions 将会自动执行 [`.github/workflows/release.yml`](./.github/workflows/release.yml)：
