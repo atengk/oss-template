@@ -64,7 +64,7 @@ show_help() {
   printf "%b\n" "  -r, --repo <repo>       仓库/项目名称 (例如 my-awesome-tool)"
   printf "%b\n" "  -a, --author <author>   作者称谓或版权所有者 (例如 Zhang San)"
   printf "%b\n" "  -e, --email <email>     安全漏洞联络邮箱 (例如 security@my-org.com)"
-  printf "%b\n" "  --clean, --self-destruct 初始化完成后删除 setup.sh 并自动创建初始提交"
+  printf "%b\n" "  --clean, --self-destruct 初始化完成后裁剪 README 模版教学章节、删除 setup.sh 并自动创建初始提交"
   printf "%b\n" "  -y, --yes               跳过确认提示，直接执行替换 (注意: 默认不自毁，需显式加 --clean)"
   printf "%b\n" "  -n, --dry-run           演练模式，仅预览拟替换内容，不修改任何文件"
   printf "%b\n" "  -h, --help              显示帮助信息"
@@ -260,9 +260,9 @@ printf "  4. 作者称谓   : %b%s%b  ==>  %b%s%b\n" "${COLOR_YELLOW}" "Ateng" "
 printf "  5. 安全邮箱   : %b%s%b  ==>  %b%s%b\n" "${COLOR_YELLOW}" "security@example.com" "${COLOR_RESET}" "${COLOR_GREEN}" "$NEW_EMAIL" "${COLOR_RESET}"
 printf "  6. Git 钩子   : 自动配置核心钩子路径为 %b.githooks%b (守门 Conventional Commits)\n" "${COLOR_GREEN}" "${COLOR_RESET}"
 if [ "$CLEAN_AFTER_SETUP" = true ]; then
-  printf "  7. 自毁清理   : %b初始化完成后自动删除 scripts/setup.sh 并创建初始提交%b\n" "${COLOR_YELLOW}" "${COLOR_RESET}"
+  printf "  7. 自毁清理   : %b初始化完成后自动裁剪 README 模版教学章节、删除 setup.sh 并创建初始提交%b\n" "${COLOR_YELLOW}" "${COLOR_RESET}"
 fi
-printf "  8. 涉及文件   : README.md, CONTRIBUTING.md, SECURITY.md, LICENSE, scripts/*.sh, .github/...\n"
+printf "  8. 涉及文件   : README.md, CODE_OF_CONDUCT.md, CONTRIBUTING.md, SECURITY.md, LICENSE, scripts/*.sh, .githooks/...\n"
 printf "%b\n\n" "${COLOR_BOLD}${COLOR_CYAN}------------------------------------------------------------------${COLOR_RESET}"
 
 if [ "$DRY_RUN" = true ]; then
@@ -308,11 +308,68 @@ safe_replace() {
   mv "$tmp_file" "$target_file"
 }
 
+# 自动裁剪 README.md 中的模版教学章节并注入标准业务快速开始骨架
+replace_template_section_in_readme() {
+  local readme_file="$REPO_ROOT/README.md"
+  if [ ! -f "$readme_file" ]; then
+    return 0
+  fi
+  if ! grep -q "<!-- TEMPLATE_SETUP_START -->" "$readme_file" 2>/dev/null; then
+    return 0
+  fi
+
+  log_info "正在将 README.md 中的模版教学章节裁剪为标准业务快速开始骨架..."
+
+  local tmp_file="${readme_file}.tmp.$$"
+  local skeleton_file="${readme_file}.skel.$$"
+
+  cat << 'EOF' > "$skeleton_file"
+## 🛠️ 快速开始
+
+### 1. 环境准备
+请确保本地已就绪项目所需的运行环境与开发工具。
+
+### 2. 本地构建与规范提交
+```bash
+# 激活本地 Git 规范提交守护钩子 (Conventional Commits 守门)
+git config core.hooksPath .githooks
+
+# 根据你的具体技术栈执行构建或测试 (请在此补充业务构建命令)
+```
+
+### 3. 配置 CI/CD 构建插槽
+打开 [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)，解除对应技术栈（Node.js / Java / Go / Python）步骤的注释即可激活自动化流水线。
+EOF
+
+  awk '
+    BEGIN { inside=0 }
+    /<!-- TEMPLATE_SETUP_START -->/ {
+      inside=1
+      while ((getline line < skeleton) > 0) {
+        print line
+      }
+      close(skeleton)
+      next
+    }
+    /<!-- TEMPLATE_SETUP_END -->/ {
+      inside=0
+      next
+    }
+    inside==0 { print }
+  ' skeleton="$skeleton_file" "$readme_file" > "$tmp_file"
+
+  rm -f "$skeleton_file"
+  mv "$tmp_file" "$readme_file"
+  log_success "已完成 README.md 模版教学章节自动裁剪与业务骨架注入！"
+}
+
 TARGET_FILES=(
   "README.md"
+  "CODE_OF_CONDUCT.md"
   "CONTRIBUTING.md"
   "SECURITY.md"
   "LICENSE"
+  ".githooks/commit-msg"
   "scripts/commit.sh"
   "scripts/release.sh"
   "scripts/setup.sh"
@@ -352,7 +409,7 @@ printf "%b\n" "${COLOR_BOLD}${COLOR_GREEN}======================================
 
 # 交互模式下询问是否自清理（若命令行未传 --clean）
 if [ "$CLEAN_AFTER_SETUP" = false ] && [ -t 0 ] && [ "$AUTO_CONFIRM" = false ]; then
-  printf "\n%b是否清理模版向导 (删除 scripts/setup.sh) 并自动创建初始提交? [y/N]: %b" "${COLOR_BOLD}" "${COLOR_RESET}"
+  printf "\n%b是否清理模版向导 (自动裁剪 README 模版教学章节、删除 scripts/setup.sh 并创建初始提交)? [y/N]: %b" "${COLOR_BOLD}" "${COLOR_RESET}"
   read -r CLEAN_PROMPT
   CLEAN_PROMPT=$(echo "$CLEAN_PROMPT" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
   case "$CLEAN_PROMPT" in
@@ -366,13 +423,14 @@ if [ "$CLEAN_AFTER_SETUP" = false ] && [ -t 0 ] && [ "$AUTO_CONFIRM" = false ]; 
 fi
 
 if [ "$CLEAN_AFTER_SETUP" = true ]; then
-  log_info "正在清理模版向导并创建初始提交..."
+  log_info "正在裁剪模版教学章节并清理初始化向导..."
+  replace_template_section_in_readme
   rm -f "$REPO_ROOT/scripts/setup.sh"
   git add -A
   git commit -m "chore: initialize repository from template"
-  log_success "已安全删除 scripts/setup.sh 并自动完成初始化提交！"
+  log_success "已安全裁剪 README.md、删除 scripts/setup.sh 并自动完成初始化提交！"
   printf "\n仓库现已整洁就绪。推荐后续操作:\n"
-  printf "  1. 参照 %bREADME.md%b 中的 <!-- TEMPLATE_SETUP_START --> 锚点，将模版教学更新为你自己的业务说明；\n" "${COLOR_CYAN}" "${COLOR_RESET}"
+  printf "  1. 打开 %bREADME.md%b 补充完善你的业务功能介绍与安装步骤；\n" "${COLOR_CYAN}" "${COLOR_RESET}"
   printf "  2. 打开 %b.github/workflows/ci.yml%b 配置你的业务构建与测试步骤；\n" "${COLOR_CYAN}" "${COLOR_RESET}"
   printf "  3. 运行 %bgit push origin main%b 推送你的新项目。\n\n" "${COLOR_CYAN}" "${COLOR_RESET}"
 else

@@ -40,69 +40,94 @@
 ---
 
 <!-- TEMPLATE_SETUP_START -->
-## 🛠️ 快速开始：基于本模版初始化新项目
+## 🛠️ 快速开始与接入方案
 
-### 1. 使用模版创建仓库
+本项目不仅支持**从零创建新项目**，还完美支持为**已有存量项目无损引入现代开源规范**。请根据你的场景选择：
+
+---
+
+### 🌟 场景一：基于本模版初始化全新项目 (New Project)
+
+#### 1. 使用模版创建仓库
 在 GitHub 仓库首页点击绿色的 **「Use this template」 -> 「Create a new repository」** 创建你的新项目仓库，或直接点击下方快捷入口：
 
 > 🚀 **[点击一键基于本模版创建新仓库 (One-Click Generate)](https://github.com/atengk/oss-template/generate)**
 
-### 2. 全局替换模版默认信息 (三选一)
+#### 2. 全局替换模版默认信息 (三选一)
 
-你可以自由选择以下任一方式初始化新项目：
+- **🤖 方式 A：让 AI 编程助手一键初始化（强烈推荐！）**
+  如果你使用 Antigravity、Cursor、GitHub Copilot 或 Claude Code 等 AI 助手，直接复制下方指令发送给 AI 即可一步到位：
 
-#### 🤖 方式 A：让 AI 编程助手一键初始化（强烈推荐！）
-如果你使用 Antigravity、Cursor、GitHub Copilot 或 Claude Code 等 AI 助手，直接复制下方指令发送给 AI 即可一步到位：
+  > **📋 一键初始化 Prompt (直接复制发给 AI)：**
+  > ```text
+  > 请读取当前项目，帮我将该开源模版初始化为我的全新独立项目：
+  > - GitHub 组织或用户名：<your-username>
+  > - 仓库/项目名称：<your-repo>
+  > - 作者姓名/版权所有者：<Your Name>
+  > - 安全漏洞披露邮箱：<security@your-domain.com>
+  > 
+  > 执行要求：
+  > 1. 全局精准替换上述元数据（包括 README.md、CODE_OF_CONDUCT.md、CONTRIBUTING.md、SECURITY.md、LICENSE、.github/ISSUE_TEMPLATE/config.yml 等）；
+  > 2. 配置本地 Git 规范提交钩子：执行 git config core.hooksPath .githooks；
+  > 3. 运行 bash scripts/setup.sh --clean -y 自动完成模版教学章节裁剪、清理 setup.sh 并创建初始提交；
+  > 4. 【可选极简选项】：如果我不打算使用 scripts/ 目录下的辅助脚本，请同时将 scripts/ 目录完整物理删除（本项目完全支持纯原生 Git 与 GitHub Web 网页端零脚本开发）。
+  > ```
 
-> **📋 一键初始化 Prompt (直接复制发给 AI)：**
+- **🛠️ 方式 B：使用内置向导脚本 (scripts/setup.sh)**
+  克隆新仓库到本地后，运行内置向导自动替换并激活 Git 钩子：
+  ```bash
+  # 交互式向导 (引导输入，支持初始化完成后一键自毁向导脚本并创建初始提交)
+  bash scripts/setup.sh
+
+  # 命令行静默执行并在完成后自动清理向导脚本、注入业务骨架并创建初始提交
+  bash scripts/setup.sh -u my-org -r my-awesome-tool --clean -y
+  ```
+
+- **✍️ 方式 C：纯手动或 IDE 全局搜索替换**
+  在 IDE 中全局搜索替换 `atengk/oss-template`、`atengk`、`oss-template`、`Ateng` 与 `security@example.com`，随后在终端执行 `git config core.hooksPath .githooks`。
+
+---
+
+### 📦 场景二：已有存量项目一键引入本套件 (Adopt in Existing Projects)
+
+如果你已有正在运行的存量项目，希望引入本套件的**自动化发版、更新日志提取、提交守护与社区治理规范**，同时**绝不影响现有业务代码、不破坏历史提交、不覆盖已有配置**：
+
+#### 🤖 方式 A：AI 外科手术式无损接入 (强烈推荐！)
+复制下方指令发送给你项目中的 AI 编程助手（Antigravity / Cursor / Claude Code 等），AI 将自动阅读你的技术栈并执行安全增量缝合：
+
+> **📋 存量项目接入 Prompt (直接复制发给 AI)：**
 > ```text
-> 请读取当前项目，帮我将该开源模版初始化为我的全新独立项目：
-> - GitHub 组织或用户名：<your-username>
-> - 仓库/项目名称：<your-repo>
-> - 作者姓名/版权所有者：<Your Name>
-> - 安全漏洞披露邮箱：<security@your-domain.com>
+> 请参考开源模版 https://github.com/atengk/oss-template 的工程化规范，帮我为当前已有项目无损引入现代开源工程规范：
 > 
-> 执行要求：
-> 1. 全局精准替换上述元数据（包括 README.md、CONTRIBUTING.md、SECURITY.md、LICENSE、.github/ISSUE_TEMPLATE/config.yml 等）；
-> 2. 配置本地 Git 规范提交钩子：执行 git config core.hooksPath .githooks；
-> 3. 替换完成后，删除 scripts/setup.sh 脚本，并移除 README.md 中 <!-- TEMPLATE_SETUP_START --> 到 <!-- TEMPLATE_SETUP_END --> 之间的模版教学章节；
-> 4. 【可选极简选项】：如果我不打算使用 scripts/ 目录下的辅助脚本，请同时将 scripts/ 目录完整物理删除（本项目完全支持纯原生 Git 与 GitHub Web 网页端零脚本开发）。
+> 执行原则：【外科手术式增量缝合，严禁破坏/覆盖任何现有业务代码、现有业务文档与现有构建逻辑】
+> 
+> 具体执行步骤：
+> 1. 资产与分支识别：探测当前项目的实际技术栈（Node.js/Java/Go/Python等）与主干分支名称（main 或 master）；
+> 2. 引入提交守门构件：
+>    - 引入 .githooks/commit-msg 守门 Conventional Commits；
+>    - 引入 scripts/commit.sh 作为可选日常提交助手；
+> 3. 引入自动化发版体系：
+>    - 引入 .cliff.toml（适配 v?[0-9].* 标签正则）与 scripts/release.sh；
+>    - 在 scripts/release.sh 的 custom_bump_version 中按需解除本技术栈的版本号更新命令；
+>    - 引入 .github/workflows/release.yml 双通道发版流水线；
+> 4. 社区治理与配置增量安全合并：
+>    - 引入 CODE_OF_CONDUCT.md、CONTRIBUTING.md、SECURITY.md 与 Issue/PR 模板；
+>    - 安全合并 .editorconfig、.gitattributes 与 .gitignore（仅增量追加规则，保留原有配置）；
+>    - 在当前 CI 流水线中增量追加 PR 标题规范校验与 ShellCheck 检查步骤；
+> 5. 文档微创维护：
+>    - 100% 完整保留我原有的 README.md 业务描述与架构说明，仅在顶部补充 CI 与 Release 状态徽标，并在贡献章节链接至 CONTRIBUTING.md；
+> 6. 软着陆引导：提醒我在 GitHub 仓库 Settings 中开启「Squash and merge」并将默认信息设为 PR Title，实现团队零侵入无感过渡。
 > ```
 
-#### 🛠️ 方式 B：使用内置向导脚本 (scripts/setup.sh)
-克隆新仓库到本地后，直接运行内置向导自动探测环境、安全替换并激活 Git 钩子：
+#### 🛠️ 方式 B：手动增量复制引入
+若偏好手动接入，只需将本模版的以下构件按需复制到你的项目中：
+1. **发版与日志**：复制 `.cliff.toml`、`scripts/release.sh` 与 `.github/workflows/release.yml`；
+2. **规范提交**：复制 `.githooks/commit-msg` 并执行 `git config core.hooksPath .githooks`（或直接使用 GitHub Squash Merge 软着陆）；
+3. **治理文档**：复制 `CODE_OF_CONDUCT.md`、`CONTRIBUTING.md`、`SECURITY.md` 并将其中占位符更新为你自己的项目信息。
 
-```bash
-# 交互式向导（引导输入，支持初始化完成后一键自毁向导脚本并创建初始提交）
-bash scripts/setup.sh
+---
 
-# 命令行静默执行（适合 CI / 自动化脚本执行）
-bash scripts/setup.sh -u my-org -r my-awesome-tool -a "Zhang San" -e "security@my-org.com" -y
-
-# 静默执行并在完成后自动清理向导脚本并创建初始提交
-bash scripts/setup.sh -u my-org -r my-awesome-tool --clean -y
-```
-
-#### ✍️ 方式 C：纯手动或 IDE 全局搜索替换
-在 IDE 中全局搜索以下默认值进行手动替换：
-
-| 搜索内容（当前默认值） | 替换为你自己的内容 | 说明 | 示例 |
-| :--- | :--- | :--- | :--- |
-| `atengk/oss-template` | `your-username/your-repo` | 仓库全路径（更新 Badge 徽标与链接） | `my-org/my-awesome-tool` |
-| `atengk` | `your-username` | 你的 GitHub 用户名或组织名 | `my-org` |
-| `oss-template` | `your-repo` | 你的新项目仓库名称 | `my-awesome-tool` |
-| `Ateng` | `Your Name` | 作者称谓 / 版权所有者 | `Zhang San` |
-| `security@example.com` | `your-security-email` | 安全漏洞私密联络邮箱 (SECURITY.md) | `security@my-org.com` |
-
-手动替换完成后，推荐在本地终端执行一次以下命令激活提交守护：
-```bash
-git config core.hooksPath .githooks
-```
-
-### 3. 配置业务构建与测试插槽
-打开 [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)，找到对应的技术栈区域（Node.js / Java / Go / Python），解除对应步骤的注释并填入你的构建/测试命令即可。
-
-### 4. 开启 GitHub 仓库设置（关键避坑与日志银弹）
+### ⚙️ 通用关键配置（关键避坑与日志银弹）
 
 > [!IMPORTANT]
 > **1. 开启发版流水线写入权限 (必须)**：
@@ -110,13 +135,15 @@ git config core.hooksPath .githooks
 > - 前往仓库 **Settings -> Actions -> General -> Workflow permissions**；
 > - 勾选 **Read and write permissions** 并点击保存。
 > 
-> **2. 推荐开启 Squash and merge 压缩合并 (零脚本日志银弹，强烈推荐)**：
+> **2. 开启 Squash and merge 压缩合并 (零脚本日志银弹，强烈推荐)**：
 > 如果你在日常开发中不想跑任何本地提交脚本，也不想强迫团队成员安装本地钩子，建议开启 GitHub 默认压缩合并：
 > - 前往仓库 **Settings -> General -> Pull Requests**；
 > - 勾选 **Allow squash merging**，并将默认提交信息设置为 **Pull request title and description**；
 > - **收益**：开发者在本地无论怎么自由提交，只要通过 PR 合并，主干上的提交信息就会自动被规范的 PR 标题替换（PR 标题由 CI 自动守门），零脚本也能 100% 保证发版更新日志精美准确！
 
-### 5. 日常规范化提交 (原生 Git 与可选 commit.sh)
+---
+
+### 💡 日常规范化提交 (原生 Git 与可选 commit.sh)
 - **方式 A (推荐日常首选)**：直接使用 IDE 图形界面或命令行原生 `git commit`（只要配置了上述 Squash and merge 或运行过 `git config core.hooksPath .githooks`，提交完全自由受控）；
 - **方式 B (进阶可选工具箱)**：运行内置的规范提交助手 [scripts/commit.sh](./scripts/commit.sh)，通过编号菜单引导选择类型、范围与描述：
   ```bash
@@ -199,6 +226,7 @@ GitHub Actions 将会自动执行 [`.github/workflows/release.yml`](./.github/wo
 ├── .editorconfig                   # 跨编辑器编码与缩进规范
 ├── .gitattributes                  # 跨平台换行符归一化配置 (强制 LF)
 ├── .gitignore                      # 跨语言通用忽略配置
+├── CODE_OF_CONDUCT.md              # 社区行为准则 (Contributor Covenant v2.1)
 ├── CONTRIBUTING.md                 # 贡献指南与 Commit 提交规范
 ├── LICENSE                         # 开源许可证 (Apache-2.0)
 ├── README.md                       # 项目主文档

@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
-    branches: [main]
+    branches: [main, master]
     types: [opened, edited, synchronize, reopened]
 
 # 并发控制：同一分支/PR 有新提交时自动取消正在执行的陈旧构建，防止竞态并节省资源
@@ -49,13 +49,15 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: 静态校验工程脚本与 Git 钩子语法 (Bash Syntax Check)
+      - name: 静态校验工程脚本与 Git 钩子语法与规范 (Bash Syntax & ShellCheck)
         run: |
           if ls scripts/*.sh >/dev/null 2>&1; then
             bash -n scripts/*.sh
+            shellcheck --severity=warning scripts/*.sh
           fi
           if ls .githooks/* >/dev/null 2>&1; then
             bash -n .githooks/*
+            shellcheck --severity=warning .githooks/*
           fi
 
       # ========================================================================

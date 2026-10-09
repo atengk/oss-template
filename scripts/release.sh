@@ -185,8 +185,11 @@ fi
 # ==============================================================================
 # 2. 版本号解析与语义化推导
 # ==============================================================================
-# 获取最近一次符合 v* 规范的 Git Tag
+# 获取最近一次历史 Git Tag (优先匹配标准 v* 标签；若存量项目未带 v 则兼容匹配纯数字标签)
 LATEST_TAG=$(git describe --tags --abbrev=0 --match "v[0-9]*" 2>/dev/null || echo "")
+if [ -z "$LATEST_TAG" ]; then
+  LATEST_TAG=$(git describe --tags --abbrev=0 --match "[0-9]*" 2>/dev/null || echo "")
+fi
 
 if [ -z "$LATEST_TAG" ]; then
   log_info "未检测到历史版本 Tag，将基于初始版本 v0.0.0 推导。"
@@ -195,8 +198,13 @@ if [ -z "$LATEST_TAG" ]; then
   V_MINOR=0
   V_PATCH=0
 else
-  log_info "检测到当前最新版本 Tag: $LATEST_TAG"
-  BASE_VERSION="$LATEST_TAG"
+  if [[ "$LATEST_TAG" =~ ^[0-9] ]]; then
+    log_info "检测到存量项目历史版本 Tag（未带 v 前缀）: $LATEST_TAG，本次发版将自动对齐为标准 SemVer (v$LATEST_TAG)"
+    BASE_VERSION="v$LATEST_TAG"
+  else
+    log_info "检测到当前最新版本 Tag: $LATEST_TAG"
+    BASE_VERSION="$LATEST_TAG"
+  fi
   # 提取版本号数字部分 (去掉 v 前缀以及可能的预发布后缀与构建元数据)
   CLEAN_VER=$(echo "$BASE_VERSION" | sed 's/^v//' | cut -d'-' -f1 | cut -d'+' -f1)
   V_MAJOR=$(echo "$CLEAN_VER" | cut -d'.' -f1)

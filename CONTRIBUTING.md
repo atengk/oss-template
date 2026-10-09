@@ -173,35 +173,7 @@ bash scripts/release.sh v1.0.0 -y
 
 ---
 
-### 🌐 方式二：GitHub Actions 网页端云端调度发版 (workflow_dispatch)
-
-若维护者未在本地配置终端发版环境，可直接在 GitHub 网页端一键触发：
-1. 前往 GitHub 仓库页面，点击顶部 **Actions** 标签页；
-2. 在左侧选择 **Release** 流水线；
-3. 点击右侧蓝色的 **Run workflow** 下拉按钮；
-4. 在 **发布版本号** 输入框中填入目标版本号（如 `v1.2.0`）；
-5. 点击绿色 **Run workflow** 按钮启动流水线。
-GitHub Actions 将自动执行版本格式校验、在 `main` 当前提交显式创建并推送附注 Git Tag，随后自动提取日志完成 Release 发布。发布完成后，你在本地执行 `git fetch --tags` 即可无缝同步远端 Tag。
-
----
-
-### 🛠️ 方式三：原生 Git 命令行手动打标触发
-
-若偏好纯手动敲命令，可按照标准步骤在本地打标并推送：
-
-```bash
-# 步骤 A：确保本地最新代码已推送到 main 分支且工作区干净
-git checkout main
-git pull origin main
-git push origin main
-
-# 步骤 B：打附注版本标签并推送到 GitHub (支持 v1.0.0, v1.0.0-beta.1 等)
-git tag -a v1.0.0 -m "Release v1.0.0"
-git push origin v1.0.0
-```
-
-
-### 4. 自动化流水线运行
+### ⚙️ 自动化流水线运行
 标签推送后，GitHub Actions 将会自动执行 [`.github/workflows/release.yml`](./.github/workflows/release.yml)：
 - 自动提取自上一版本以来的全部提交与 PR，由 `git-cliff` 格式化为发布日志；
 - 自动创建 GitHub Release 并挂载发布内容；
