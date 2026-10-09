@@ -84,7 +84,7 @@ jobs:
           OUTPUT: CHANGELOG_RELEASE.md
 
       - name: 创建 GitHub Release 并挂载发布内容
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.release-meta.outputs.tag_name }}
           name: ${{ steps.release-meta.outputs.tag_name }}
