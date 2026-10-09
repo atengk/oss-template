@@ -27,6 +27,7 @@ jobs:
       contents: write
     outputs:
       tag_name: ${{ steps.release-meta.outputs.tag_name }}
+      raw_version: ${{ steps.release-meta.outputs.raw_version }}
       is_prerelease: ${{ steps.release-meta.outputs.is_prerelease }}
 
     steps:
@@ -80,7 +81,9 @@ jobs:
             fi
           fi
 
+          RAW_VERSION=$(echo "$TAG_NAME" | sed 's/^v//')
           echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "raw_version=$RAW_VERSION" >> "$GITHUB_OUTPUT"
           if [[ "$TAG_NAME" =~ - ]]; then
             echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
           else
@@ -140,7 +143,10 @@ jobs:
 #     contents: read
 #     id-token: write # 现代 npm Trusted Publishing (OIDC) 所需权限
 #   steps:
-#     - uses: actions/checkout@v7
+#     - name: 检出发版标签对应代码
+#       uses: actions/checkout@v7
+#       with:
+#         ref: ${{ needs.github-release.outputs.tag_name }}
 #     - uses: actions/setup-node@v4
 #       with:
 #         node-version: 20
@@ -167,7 +173,10 @@ jobs:
 #   permissions:
 #     contents: read
 #   steps:
-#     - uses: actions/checkout@v7
+#     - name: 检出发版标签对应代码
+#       uses: actions/checkout@v7
+#       with:
+#         ref: ${{ needs.github-release.outputs.tag_name }}
 #     - uses: actions/setup-java@v4
 #       with:
 #         distribution: 'temurin'
@@ -176,6 +185,7 @@ jobs:
 #         gpg-passphrase: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
 #     # 方式 A (推荐)：2024+ 现代化 Sonatype Central Portal (central.sonatype.com)
 #     # 使用 Central 发布插件 central-publishing-maven-plugin，配置 CENTRAL_USERNAME 与 CENTRAL_PASSWORD
+#     # 可在 pom.xml 中使用 ${{ needs.github-release.outputs.raw_version }} 作为部署版本号
 #     - run: mvn clean deploy -DskipTests -B
 #       env:
 #         CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
@@ -198,7 +208,10 @@ jobs:
 #     contents: read
 #     id-token: write # PyPI Trusted Publisher (OIDC) 无需配置静态 Token，安全便捷
 #   steps:
-#     - uses: actions/checkout@v7
+#     - name: 检出发版标签对应代码
+#       uses: actions/checkout@v7
+#       with:
+#         ref: ${{ needs.github-release.outputs.tag_name }}
 #     - uses: actions/setup-python@v5
 #       with:
 #         python-version: '3.11'
@@ -215,9 +228,13 @@ jobs:
 #     contents: read
 #     packages: write # 推送至 GitHub Container Registry (ghcr.io) 所需权限
 #   steps:
-#     - name: 检出代码 (全量检出供 SemVer 版本比对)
+#     - name: 转换仓库名称为全小写 (Lowercase Repository Name)
+#       run: echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+#
+#     - name: 检出代码 (检出当前发版标签版本)
 #       uses: actions/checkout@v7
 #       with:
+#         ref: ${{ needs.github-release.outputs.tag_name }}
 #         fetch-depth: 0
 #
 #     - name: 设置 QEMU 模拟器（多架构支持）
@@ -245,15 +262,16 @@ jobs:
 #       id: meta
 #       uses: docker/metadata-action@v5
 #       with:
-#         # 镜像目标：默认推送至 GHCR（免配置）；若需推送到 Docker Hub，在下方追加一行：your-username/your-image
+#         # 镜像目标：默认推送至 GHCR（小写规整防报错）；若需推送到 Docker Hub，在下方追加一行：your-username/your-image
 #         images: |
-#           ghcr.io/${{ github.repository }}
+#           ghcr.io/${{ env.REPO_LC }}
 #         flavor: |
 #           latest=${{ needs.github-release.outputs.is_prerelease != 'true' }}
 #         tags: |
-#           type=semver,pattern={{version}}
-#           type=semver,pattern={{major}}.{{minor}},enable=${{ needs.github-release.outputs.is_prerelease != 'true' }}
-#           type=semver,pattern={{major}},enable=${{ needs.github-release.outputs.is_prerelease != 'true' }}
+#           type=semver,pattern={{version}},value=${{ needs.github-release.outputs.tag_name }}
+#           type=semver,pattern={{major}}.{{minor}},value=${{ needs.github-release.outputs.tag_name }},enable=${{ needs.github-release.outputs.is_prerelease != 'true' }}
+#           type=semver,pattern={{major}},value=${{ needs.github-release.outputs.tag_name }},enable=${{ needs.github-release.outputs.is_prerelease != 'true' }}
+#           type=raw,value=${{ needs.github-release.outputs.tag_name }}
 #
 #     - name: 构建并推送多架构镜像 (amd64 / arm64)
 #       uses: docker/build-push-action@v6
@@ -277,9 +295,10 @@ jobs:
 #   permissions:
 #     contents: write # 上传二进制附件至 Release 所需权限
 #   steps:
-#     - name: 检出代码
+#     - name: 检出代码 (检出当前发版标签版本)
 #       uses: actions/checkout@v7
 #       with:
+#         ref: ${{ needs.github-release.outputs.tag_name }}
 #         fetch-depth: 0
 #     - name: 安装 Go
 #       uses: actions/setup-go@v5
@@ -308,8 +327,10 @@ jobs:
 #     name: github-pages
 #     url: ${{ steps.deployment.outputs.page_url }}
 #   steps:
-#     - name: 检出代码
+#     - name: 检出代码 (检出当前发版标签版本)
 #       uses: actions/checkout@v7
+#       with:
+#         ref: ${{ needs.github-release.outputs.tag_name }}
 #     - name: 安装 Node.js
 #       uses: actions/setup-node@v4
 #       with:
