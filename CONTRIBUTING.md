@@ -48,14 +48,43 @@
 | `chore` | 其他琐碎杂项（不改动源码与测试） | `chore: 更新 .gitignore 忽略规则` |
 | `revert` | 恢复或回滚此前的某次历史提交 | `revert: feat(auth): 回退登录授权变动` |
 
-### 💡 推荐：使用交互式规范化提交助手
+### 💡 推荐：使用规范化提交助手
 
-本项目内置了 POSIX Bash 编写的提交助手 [scripts/commit.sh](./scripts/commit.sh)，通过编号菜单引导选择类型、输入范围与描述，自动组装符合规范的提交信息并支持一键推送：
+本项目内置了 POSIX Bash 编写的提交助手 [scripts/commit.sh](./scripts/commit.sh)，同时支持**人工交互式向导**与 **AI / 自动化非交互式调用**：
 
+#### 方式 A：交互式向导模式（适合人工日常提交）
+通过编号菜单引导选择类型、输入范围与描述，自动组装符合规范的提交信息并支持一键推送（支持输入 `0` 或 `q` 随时退出）：
 ```bash
 # 在 Linux / macOS 或 Windows Git Bash 中直接运行
 bash scripts/commit.sh
 ```
+
+#### 方式 B：非交互式命令行模式（适合 AI Agent / 自动化脚本）
+支持通过标准命令行参数一键组装 Conventional Commit 并推送到远端，无需任何键盘等待交互（推荐先使用 `git add <file>` 显式安全暂存目标文件）：
+```bash
+# 标准规范化提交并自动推送 (推荐先显式精准暂存)
+git add <file-path>
+bash scripts/commit.sh -t feat -s core -m "新增用户认证能力" -p -y
+
+# 修复 Bug 且不自动推送
+git add <file-path>
+bash scripts/commit.sh -t fix -s parser -m "修复空指针异常" -y
+
+# 标记破坏性更新 (Breaking Changes)
+git add <file-path>
+bash scripts/commit.sh -t feat -s api -m "重构对外接口协议" -b -p -y
+```
+
+| 参数选项 | 说明 |
+| :--- | :--- |
+| `-t, --type <type>` | 提交类型 (`feat\|fix\|docs\|style\|refactor\|perf\|test\|build\|ci\|chore\|revert`) |
+| `-s, --scope <scope>` | 可选影响范围（如 `core`、`cli`、`api` 等） |
+| `-m, --message <msg>` | 提交主体描述（必填，简明扼要） |
+| `-b, --breaking` | 标记为破坏性更新（自动追加 `!` 标识） |
+| `-a, --all` | 自动暂存全部已修改及未跟踪文件（相当于 `git add -A`，请谨慎使用） |
+| `-p, --push` | 提交成功后自动推送至当前分支远程仓库 |
+| `-y, --yes` | 跳过确认提示直接执行提交 |
+| `-h, --help` | 查看详细帮助说明 |
 
 > 💡 **Windows 终端提示**：无论使用 PowerShell 还是 CMD，只要系统安装了 Git，直接输入 `bash scripts/commit.sh` 即可调用 Git Bash 解释器顺畅执行。
 
@@ -73,7 +102,7 @@ bash scripts/commit.sh
 ## 4. 版本发版机制与发布说明
 
 本项目通过 GitHub Actions 实现了现代化的**双通道自动化发版体系**：
-- **通道一（推荐首选）**：使用内置发版防呆脚本 `scripts/release.sh`，在本地完成严格前置自检（Pre-flight）、语义化版本推导、可插拔版本递增插槽与附注 Tag 推送；
+- **通道一（推荐首选）**：使用内置发版防呆脚本 `scripts/release.sh`，在本地完成严格前置自检（Pre-flight）、分支提交状态对齐、语义化版本推导、推送失败回滚防御与附注 Tag 推送；
 - **通道二（云端调度）**：在 GitHub 仓库 Actions 界面通过 `workflow_dispatch` 手动输入版本号一键触发发版；
 - **通道三（原生 Git）**：在本地通过原生 `git tag` & `git push` 命令触发。
 
@@ -81,17 +110,20 @@ bash scripts/commit.sh
 
 ### 🚀 方式一：使用本地发版防呆脚本（推荐首选）
 
-项目提供了具备 5 重前置防呆自检的 POSIX Bash 发版脚本 [scripts/release.sh](./scripts/release.sh)。它能够自动校验当前是否处于 `main` 主干分支、工作区是否干净无未提交代码、本地是否已拉取远端最新提交、目标 Tag 是否重名冲突，并智能推导下一个语义化版本（Patch/Minor/Major）：
+项目提供了具备 5 重前置防呆自检的 POSIX Bash 发版脚本 [scripts/release.sh](./scripts/release.sh)。它能够自动校验当前是否处于 `main` 主干分支、工作区是否干净无未提交代码、本地是否落后或超前远端最新提交（超前提交自动同步）、目标 Tag 是否重名冲突，推送失败时自动回滚本地标签避免脏 Tag 阻塞，并智能推导下一个语义化版本（Patch/Minor/Major）：
 
 ```bash
 # 1. 安全演练模式（强烈推荐在正式发版前演练，只检查并打印拟执行动作，零污染 Git 历史）
 bash scripts/release.sh --dry-run
+# 演练指定版本发版
+bash scripts/release.sh v1.0.0 --dry-run
 
-# 2. 交互式发版（自动提取最新 Tag，交互引导选择 Patch / Minor / Major 或自定义输入）
+# 2. 交互式发版（自动提取最新 Tag，交互引导选择 Patch / Minor / Major，输入 0 可随时退出）
 bash scripts/release.sh
 
-# 3. 指定版本号快速发版（直接传入合规的目标版本号参数）
+# 3. 指定版本号快速发版（可追加 -y 跳过交互确认，适合 AI Agent / CI 流水线静默执行）
 bash scripts/release.sh v1.0.0
+bash scripts/release.sh v1.0.0 -y
 ```
 
 > 💡 **Windows 终端提示**：无论使用 PowerShell 还是 CMD，只要系统安装了 Git，直接输入 `bash scripts/release.sh` 即可调用 Git Bash 解释器顺畅执行。

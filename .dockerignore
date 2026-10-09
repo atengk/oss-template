@@ -50,3 +50,6 @@ venv/
 # Go / 可执行文件
 *.exe
 /bin
+
+# Rust
+**/*.rs.bk
