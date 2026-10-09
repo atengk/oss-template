@@ -79,7 +79,7 @@ jobs:
         id: git-cliff
         with:
           config: .cliff.toml
-          args: --tag ${{ steps.release-meta.outputs.tag_name }} --strip header
+          args: --tag ${{ steps.release-meta.outputs.tag_name }} --latest --strip header
         env:
           OUTPUT: CHANGELOG_RELEASE.md
 
