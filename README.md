@@ -1,7 +1,7 @@
 # OSS Template (Open Source Software Template)
 
 <p align="center">
-  <strong>通用的 GitHub 开源项目基础模版仓库（开箱即用集成 CI/CD、Docker 与工程化规范）</strong>
+  <strong>通用的 GitHub 开源项目基础模版仓库（开箱即用集成 CI/CD、自动发版、Docker 与工程化规范）</strong>
 </p>
 
 <p align="center">
@@ -34,6 +34,7 @@
 - 🎯 **技术栈纯净解耦**：无侵入式设计，不绑定任何特定语言运行时，保留统一的工程底座；
 - 🚀 **双通道自动化发版体系**：支持本地脚本驱动与云端网页调度（`workflow_dispatch`），打 Tag 自动触发发版、自动提取 PR/Commit 生成精美更新日志、自动挂载打包物附件；
 - 🛡️ **双重提交守门与工程脚本（人机协同兼顾）**：内置原生 Git 钩子 `.githooks/commit-msg`（零外部依赖守门 Conventional Commits）、规范提交助手 `scripts/commit.sh`、初始化向导 `scripts/setup.sh` 及发版防呆脚本 `scripts/release.sh`，全面支持交互式向导与静默参数（`-y`），既方便人工沉浸交互，又无缝兼容 AI Agent 与 CI 自动化调用；
+- 🔒 **工业级 CI/CD 权限加固与多生态依赖巡检**：遵循最小权限原则（Least Privilege）严格收敛流水线权限，预置主流包管理器（npm/Maven/pip/gomod/Cargo/Docker）Dependabot 自动化依赖安全巡检插槽；
 - 📦 **全场景分发体系预备**：内置 Maven Central (Portal)、npmjs、PyPI、Docker (GHCR) 以及 GoReleaser (CLI) 与 GitHub Pages (前端/文档) 等 6 大分发流水线参考与凭据规范；
 - 🧹 **极简整洁**：全仓库仅保留必需的核心工程规范与脚本，无冗余配置与第三方运行时负担。
 
@@ -219,7 +220,7 @@ GitHub Actions 将会自动执行 [`.github/workflows/release.yml`](./.github/wo
 │   ├── workflows/
 │   │   ├── ci.yml                  # 业务构建测试（含 PR 标题与 Shell 语法守门）
 │   │   └── release.yml             # 自动化发版、生成更新日志与分发流水线（含双通道发版与 6 大场景分发参考）
-│   ├── dependabot.yml              # GitHub Actions 依赖月度自动巡检配置
+│   ├── dependabot.yml              # GitHub Actions 及多技术栈依赖月度自动巡检配置
 │   └── PULL_REQUEST_TEMPLATE.md    # Pull Request 提交模版
 ├── .githooks/
 │   └── commit-msg                  # Git 原生提交规范守护钩子 (免外部依赖)

@@ -57,6 +57,7 @@ DRY_RUN=false
 CLEAN_AFTER_SETUP=false
 CLEAN_ALL_SCRIPTS=false
 FORCE_SETUP=false
+CURRENT_YEAR=$(date +%Y)
 
 show_help() {
   printf "%b\n" "用法: bash scripts/setup.sh [选项]"
@@ -314,11 +315,14 @@ printf "  2. 组织 / 用户: %b%s%b  ==>  %b%s%b\n" "${COLOR_YELLOW}" "atengk" 
 printf "  3. 仓库名称   : %b%s%b  ==>  %b%s%b\n" "${COLOR_YELLOW}" "oss-template" "${COLOR_RESET}" "${COLOR_GREEN}" "$NEW_REPO" "${COLOR_RESET}"
 printf "  4. 作者称谓   : %b%s%b  ==>  %b%s%b\n" "${COLOR_YELLOW}" "Ateng" "${COLOR_RESET}" "${COLOR_GREEN}" "$NEW_AUTHOR" "${COLOR_RESET}"
 printf "  5. 安全邮箱   : %b%s%b  ==>  %b%s%b\n" "${COLOR_YELLOW}" "security@example.com" "${COLOR_RESET}" "${COLOR_GREEN}" "$NEW_EMAIL" "${COLOR_RESET}"
-printf "  6. Git 钩子   : 自动配置核心钩子路径为 %b.githooks%b (守门 Conventional Commits)\n" "${COLOR_GREEN}" "${COLOR_RESET}"
+printf "  6. 版权年份   : 自动同步为当前系统年份 %b%s%b (LICENSE)\n" "${COLOR_GREEN}" "$CURRENT_YEAR" "${COLOR_RESET}"
+printf "  7. Git 钩子   : 自动配置核心钩子路径为 %b.githooks%b (守门 Conventional Commits)\n" "${COLOR_GREEN}" "${COLOR_RESET}"
 if [ "$CLEAN_AFTER_SETUP" = true ]; then
-  printf "  7. 自毁清理   : %b初始化完成后自动裁剪 README 模版教学章节、删除 setup.sh 并创建初始提交%b\n" "${COLOR_YELLOW}" "${COLOR_RESET}"
+  printf "  8. 自毁清理   : %b初始化完成后自动裁剪 README 模版教学章节、删除 setup.sh 并创建初始提交%b\n" "${COLOR_YELLOW}" "${COLOR_RESET}"
+  printf "  9. 涉及文件   : README.md, CODE_OF_CONDUCT.md, CONTRIBUTING.md, SECURITY.md, LICENSE, scripts/*.sh, .githooks/...\n"
+else
+  printf "  8. 涉及文件   : README.md, CODE_OF_CONDUCT.md, CONTRIBUTING.md, SECURITY.md, LICENSE, scripts/*.sh, .githooks/...\n"
 fi
-printf "  8. 涉及文件   : README.md, CODE_OF_CONDUCT.md, CONTRIBUTING.md, SECURITY.md, LICENSE, scripts/*.sh, .githooks/...\n"
 printf "%b\n\n" "${COLOR_BOLD}${COLOR_CYAN}------------------------------------------------------------------${COLOR_RESET}"
 
 if [ "$DRY_RUN" = true ]; then
@@ -437,6 +441,12 @@ log_info "正在替换目标工程文件占位符..."
 
 for file in "${TARGET_FILES[@]}"; do
   if [ -f "$file" ]; then
+    # 若为 LICENSE 文件，自动将版权年份更新为当前系统年份
+    if [ "$file" = "LICENSE" ]; then
+      sed "s/Copyright [0-9][0-9][0-9][0-9]/Copyright ${CURRENT_YEAR}/g" "$file" > "${file}.tmp.$$"
+      mv "${file}.tmp.$$" "$file"
+    fi
+
     # 按照先后顺序替换：先替换复合路径与邮箱，再替换独立单词
     safe_replace "$file" "atengk/oss-template" "${NEW_OWNER}/${NEW_REPO}"
     if [ -n "$CURR_OWNER" ] && [ -n "$CURR_REPO" ]; then

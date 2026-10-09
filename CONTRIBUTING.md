@@ -191,7 +191,7 @@ bash scripts/release.sh v1.0.0 -y
 如需发布至官方包管理仓库，请在仓库的 **Settings -> Secrets and variables -> Actions** 中配置对应凭证：
 
 - **npm**: 推荐配置 [npm Trusted Publishing (OIDC)](https://docs.npmjs.com/trusted-publishers)，或配置 `NPM_TOKEN`；
-- **Maven Central**: 配置 `OSSRH_USERNAME`、`OSSRH_TOKEN`、`MAVEN_GPG_PRIVATE_KEY`、`MAVEN_GPG_PASSPHRASE`；
+- **Maven Central**: 推荐使用现代化 Sonatype Central Portal，配置 `CENTRAL_USERNAME` 与 `CENTRAL_PASSWORD`（或传统 OSSRH 凭据），以及 `MAVEN_GPG_PRIVATE_KEY` 与 `MAVEN_GPG_PASSPHRASE`；
 - **PyPI**: 推荐使用官方 [PyPI Trusted Publisher (OIDC)](https://docs.pypi.org/trusted-publishers/)，免配静态密钥；
 - **Docker 镜像**:
   - **GHCR (推荐)**: 默认直接使用系统内置 `GITHUB_TOKEN`，零 Secret 配置；
