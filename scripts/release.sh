@@ -16,9 +16,11 @@ set -eo pipefail
 # 若 downstream 具体项目需要自动更新工程文件版本号，解除下方对应语言的一行配置，
 # 或在 custom_bump_version 函数中编写自定义命令。传入参数 $1 为不带 v 前缀的版本号（如 1.2.0）。
 # ==============================================================================
+# shellcheck disable=SC2034
 custom_bump_version() {
   local RAW_VERSION="$1"   # 纯版本号，如 "1.2.0"
   local FULL_VERSION="v$1" # 带 v 前缀的完整标签，如 "v1.2.0"
+  : "${RAW_VERSION}" "${FULL_VERSION}"
 
   # --- [选项 1] Java (Maven) ---
   # mvn versions:set -DnewVersion="$RAW_VERSION" -DgenerateBackupPoms=false

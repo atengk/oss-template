@@ -370,7 +370,7 @@ elif [ -t 0 ] && [ "$AUTO_CONFIRM" = false ]; then
       log_success "推送成功！"
       ;;
     *)
-      log_info "已跳过远程推送。你可以在就绪后随时运行 'git push origin %s'。" "$CURRENT_BRANCH"
+      log_info "已跳过远程推送。你可以在就绪后随时运行 'git push origin ${CURRENT_BRANCH}'。"
       ;;
   esac
 fi
