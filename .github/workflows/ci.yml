@@ -49,9 +49,14 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: 静态校验内置工程脚本语法 (Bash Syntax Check)
+      - name: 静态校验工程脚本与 Git 钩子语法 (Bash Syntax Check)
         run: |
-          bash -n scripts/*.sh
+          if ls scripts/*.sh >/dev/null 2>&1; then
+            bash -n scripts/*.sh
+          fi
+          if ls .githooks/* >/dev/null 2>&1; then
+            bash -n .githooks/*
+          fi
 
       # ========================================================================
       # 业务构建与测试插槽（根据实际技术栈解除对应注释并按需微调）

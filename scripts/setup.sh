@@ -2,7 +2,7 @@
 # ==============================================================================
 # 模版初始化向导 (Template Initialization Setup Script)
 #
-# 一键替换模版中的组织名、仓库名、作者称谓等默认占位符，支持交互式与非交互式/AI自动化调用。
+# 一键替换模版中的组织名、仓库名、作者称谓与安全邮箱，配置 Git 钩子并支持安全自清理。
 #
 # @author Ateng
 # @since 2026-10-09
@@ -51,8 +51,10 @@ log_error() {
 NEW_OWNER=""
 NEW_REPO=""
 NEW_AUTHOR=""
+NEW_EMAIL=""
 AUTO_CONFIRM=false
 DRY_RUN=false
+CLEAN_AFTER_SETUP=false
 
 show_help() {
   printf "%b\n" "用法: bash scripts/setup.sh [选项]"
@@ -61,7 +63,9 @@ show_help() {
   printf "%b\n" "  -u, --owner <owner>     GitHub 用户名或组织名 (例如 my-org)"
   printf "%b\n" "  -r, --repo <repo>       仓库/项目名称 (例如 my-awesome-tool)"
   printf "%b\n" "  -a, --author <author>   作者称谓或版权所有者 (例如 Zhang San)"
-  printf "%b\n" "  -y, --yes               跳过确认提示，直接执行替换"
+  printf "%b\n" "  -e, --email <email>     安全漏洞联络邮箱 (例如 security@my-org.com)"
+  printf "%b\n" "  --clean, --self-destruct 初始化完成后删除 setup.sh 并自动创建初始提交"
+  printf "%b\n" "  -y, --yes               跳过确认提示，直接执行替换 (注意: 默认不自毁，需显式加 --clean)"
   printf "%b\n" "  -n, --dry-run           演练模式，仅预览拟替换内容，不修改任何文件"
   printf "%b\n" "  -h, --help              显示帮助信息"
   printf "%b\n" ""
@@ -69,7 +73,8 @@ show_help() {
   printf "%b\n" "  bash scripts/setup.sh"
   printf "%b\n" ""
   printf "%b\n" "非交互式调用示例 (AI / 自动化执行):"
-  printf "%b\n" "  bash scripts/setup.sh -u my-org -r my-project -a \"Zhang San\" -y"
+  printf "%b\n" "  bash scripts/setup.sh -u my-org -r my-project -a \"Zhang San\" -e \"sec@my-org.com\" -y"
+  printf "%b\n" "  bash scripts/setup.sh -u my-org -r my-project --clean -y"
   printf "%b\n" "  bash scripts/setup.sh -u my-org -r my-project --dry-run"
 }
 
@@ -86,6 +91,14 @@ while [ $# -gt 0 ]; do
     -a|--author)
       NEW_AUTHOR="$2"
       shift 2
+      ;;
+    -e|--email)
+      NEW_EMAIL="$2"
+      shift 2
+      ;;
+    --clean|--self-destruct)
+      CLEAN_AFTER_SETUP=true
+      shift
       ;;
     -y|--yes)
       AUTO_CONFIRM=true
@@ -124,6 +137,13 @@ else
 fi
 cd "$REPO_ROOT"
 
+# 防误触与自锁防御：检测当前仓库是否已被初始化过
+if [ -f "README.md" ] && ! grep -q "atengk/oss-template" "README.md" 2>/dev/null; then
+  log_info "检测到当前项目已完成初始化（README.md 中已无模版默认占位符）。"
+  log_info "无需再次运行 setup.sh，向导已安全退出。"
+  exit 0
+fi
+
 DETECTED_REPO=$(basename "$REPO_ROOT")
 if [ "$DETECTED_REPO" = "oss-template" ]; then
   DETECTED_REPO=""
@@ -147,11 +167,16 @@ if [ "$DETECTED_AUTHOR" = "Ateng" ]; then
   DETECTED_AUTHOR=""
 fi
 
+DETECTED_EMAIL=$(git config --get user.email 2>/dev/null || echo "")
+if [ "$DETECTED_EMAIL" = "security@example.com" ]; then
+  DETECTED_EMAIL=""
+fi
+
 # ==============================================================================
 # 3. 收集并校验目标参数
 # ==============================================================================
 if [ "$AUTO_CONFIRM" = true ] || [ ! -t 0 ]; then
-  # 静默 / 非交互模式：必须提供 -u 与 -r 参数，未传 -a 时自动缺省为 -u
+  # 静默 / 非交互模式：必须提供 -u 与 -r 参数，未传 -a 时缺省为 -u，未传 -e 时缺省为 DETECTED_EMAIL 或占位符
   if [ -z "$NEW_OWNER" ] || [ -z "$NEW_REPO" ]; then
     log_error "静默/非交互式模式下必须显式提供 -u/--owner 与 -r/--repo 参数！"
     log_error "示例: bash scripts/setup.sh -u my-org -r my-tool -a \"My Name\" -y"
@@ -159,6 +184,9 @@ if [ "$AUTO_CONFIRM" = true ] || [ ! -t 0 ]; then
   fi
   if [ -z "$NEW_AUTHOR" ]; then
     NEW_AUTHOR="$NEW_OWNER"
+  fi
+  if [ -z "$NEW_EMAIL" ]; then
+    NEW_EMAIL="${DETECTED_EMAIL:-security@${NEW_OWNER}.com}"
   fi
 else
   # 交互模式引导输入
@@ -190,6 +218,15 @@ else
     INPUT_AUTHOR=$(echo "$INPUT_AUTHOR" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
     NEW_AUTHOR="${INPUT_AUTHOR:-$DEFAULT_AUTHOR}"
   fi
+
+  # 输入 Security Email
+  if [ -z "$NEW_EMAIL" ]; then
+    DEFAULT_EMAIL="${DETECTED_EMAIL:-security@${NEW_OWNER}.com}"
+    printf "4. 安全漏洞披露邮箱 (SECURITY.md) [%b%s%b]: " "${COLOR_CYAN}" "$DEFAULT_EMAIL" "${COLOR_RESET}"
+    read -r INPUT_EMAIL
+    INPUT_EMAIL=$(echo "$INPUT_EMAIL" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    NEW_EMAIL="${INPUT_EMAIL:-$DEFAULT_EMAIL}"
+  fi
 fi
 
 # 格式校验 (允许字母、数字、连字符、下划线和点)
@@ -208,6 +245,10 @@ if [ -z "$NEW_AUTHOR" ]; then
   NEW_AUTHOR="$NEW_OWNER"
 fi
 
+if [ -z "$NEW_EMAIL" ]; then
+  NEW_EMAIL="security@${NEW_OWNER}.com"
+fi
+
 # ==============================================================================
 # 4. 替换计划预览与确认
 # ==============================================================================
@@ -216,7 +257,12 @@ printf "  1. 仓库全路径 : %b%s%b  ==>  %b%s/%s%b\n" "${COLOR_YELLOW}" "aten
 printf "  2. 组织 / 用户: %b%s%b  ==>  %b%s%b\n" "${COLOR_YELLOW}" "atengk" "${COLOR_RESET}" "${COLOR_GREEN}" "$NEW_OWNER" "${COLOR_RESET}"
 printf "  3. 仓库名称   : %b%s%b  ==>  %b%s%b\n" "${COLOR_YELLOW}" "oss-template" "${COLOR_RESET}" "${COLOR_GREEN}" "$NEW_REPO" "${COLOR_RESET}"
 printf "  4. 作者称谓   : %b%s%b  ==>  %b%s%b\n" "${COLOR_YELLOW}" "Ateng" "${COLOR_RESET}" "${COLOR_GREEN}" "$NEW_AUTHOR" "${COLOR_RESET}"
-printf "  5. 涉及文件   : README.md, CONTRIBUTING.md, SECURITY.md, LICENSE, scripts/*.sh, .github/...\n"
+printf "  5. 安全邮箱   : %b%s%b  ==>  %b%s%b\n" "${COLOR_YELLOW}" "security@example.com" "${COLOR_RESET}" "${COLOR_GREEN}" "$NEW_EMAIL" "${COLOR_RESET}"
+printf "  6. Git 钩子   : 自动配置核心钩子路径为 %b.githooks%b (守门 Conventional Commits)\n" "${COLOR_GREEN}" "${COLOR_RESET}"
+if [ "$CLEAN_AFTER_SETUP" = true ]; then
+  printf "  7. 自毁清理   : %b初始化完成后自动删除 scripts/setup.sh 并创建初始提交%b\n" "${COLOR_YELLOW}" "${COLOR_RESET}"
+fi
+printf "  8. 涉及文件   : README.md, CONTRIBUTING.md, SECURITY.md, LICENSE, scripts/*.sh, .github/...\n"
 printf "%b\n\n" "${COLOR_BOLD}${COLOR_CYAN}------------------------------------------------------------------${COLOR_RESET}"
 
 if [ "$DRY_RUN" = true ]; then
@@ -277,19 +323,62 @@ log_info "正在替换目标工程文件占位符..."
 
 for file in "${TARGET_FILES[@]}"; do
   if [ -f "$file" ]; then
-    # 按照先后顺序替换：先替换复合路径，再替换独立单词
+    # 按照先后顺序替换：先替换复合路径与邮箱，再替换独立单词
     safe_replace "$file" "atengk/oss-template" "${NEW_OWNER}/${NEW_REPO}"
     safe_replace "$file" "atengk" "${NEW_OWNER}"
     safe_replace "$file" "oss-template" "${NEW_REPO}"
     safe_replace "$file" "Ateng" "${NEW_AUTHOR}"
+    safe_replace "$file" "security@example.com" "${NEW_EMAIL}"
     log_success "已完成更新: $file"
   fi
 done
 
+# ==============================================================================
+# 6. 配置 Git 原生钩子 (core.hooksPath)
+# ==============================================================================
+if [ -d ".githooks" ]; then
+  log_info "正在配置 Git 原生提交规范钩子 (.githooks)..."
+  chmod +x .githooks/* 2>/dev/null || true
+  git config core.hooksPath .githooks
+  log_success "已激活 Git 本地提交守门钩子 (core.hooksPath = .githooks)"
+fi
+
+# ==============================================================================
+# 7. 自毁清理与后续引导
+# ==============================================================================
 printf "\n%b\n" "${COLOR_BOLD}${COLOR_GREEN}================================================================${COLOR_RESET}"
 printf "%b\n" "${COLOR_BOLD}${COLOR_GREEN}               🎉 模版初始化占位符替换圆满完成！                ${COLOR_RESET}"
 printf "%b\n" "${COLOR_BOLD}${COLOR_GREEN}================================================================${COLOR_RESET}"
-printf "\n推荐后续操作:\n"
-printf "  1. 运行 %bgit diff%b 查看具体变更细节；\n" "${COLOR_CYAN}" "${COLOR_RESET}"
-printf "  2. 打开 %b.github/workflows/ci.yml%b 配置你的业务构建与测试步骤；\n" "${COLOR_CYAN}" "${COLOR_RESET}"
-printf "  3. 运行 %bbash scripts/commit.sh%b 提交你的项目初始化改动。\n\n" "${COLOR_CYAN}" "${COLOR_RESET}"
+
+# 交互模式下询问是否自清理（若命令行未传 --clean）
+if [ "$CLEAN_AFTER_SETUP" = false ] && [ -t 0 ] && [ "$AUTO_CONFIRM" = false ]; then
+  printf "\n%b是否清理模版向导 (删除 scripts/setup.sh) 并自动创建初始提交? [y/N]: %b" "${COLOR_BOLD}" "${COLOR_RESET}"
+  read -r CLEAN_PROMPT
+  CLEAN_PROMPT=$(echo "$CLEAN_PROMPT" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+  case "$CLEAN_PROMPT" in
+    [yY][eE][sS]|[yY])
+      CLEAN_AFTER_SETUP=true
+      ;;
+    *)
+      CLEAN_AFTER_SETUP=false
+      ;;
+  esac
+fi
+
+if [ "$CLEAN_AFTER_SETUP" = true ]; then
+  log_info "正在清理模版向导并创建初始提交..."
+  rm -f "$REPO_ROOT/scripts/setup.sh"
+  git add -A
+  git commit -m "chore: initialize repository from template"
+  log_success "已安全删除 scripts/setup.sh 并自动完成初始化提交！"
+  printf "\n仓库现已整洁就绪。推荐后续操作:\n"
+  printf "  1. 参照 %bREADME.md%b 中的 <!-- TEMPLATE_SETUP_START --> 锚点，将模版教学更新为你自己的业务说明；\n" "${COLOR_CYAN}" "${COLOR_RESET}"
+  printf "  2. 打开 %b.github/workflows/ci.yml%b 配置你的业务构建与测试步骤；\n" "${COLOR_CYAN}" "${COLOR_RESET}"
+  printf "  3. 运行 %bgit push origin main%b 推送你的新项目。\n\n" "${COLOR_CYAN}" "${COLOR_RESET}"
+else
+  printf "\n推荐后续操作:\n"
+  printf "  1. 运行 %bgit diff%b 查看具体变更细节；\n" "${COLOR_CYAN}" "${COLOR_RESET}"
+  printf "  2. 参照 %bREADME.md%b 中的 <!-- TEMPLATE_SETUP_START --> 锚点，将模版教学更新为你自己的业务说明；\n" "${COLOR_CYAN}" "${COLOR_RESET}"
+  printf "  3. 打开 %b.github/workflows/ci.yml%b 配置你的业务构建与测试步骤；\n" "${COLOR_CYAN}" "${COLOR_RESET}"
+  printf "  4. 运行 %bbash scripts/commit.sh%b 提交你的项目初始化改动（或手动删除 scripts/setup.sh）。\n\n" "${COLOR_CYAN}" "${COLOR_RESET}"
+fi

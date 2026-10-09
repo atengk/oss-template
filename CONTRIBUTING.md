@@ -48,6 +48,16 @@
 | `chore` | 其他琐碎杂项（不改动源码与测试） | `chore: 更新 .gitignore 忽略规则` |
 | `revert` | 恢复或回滚此前的某次历史提交 | `revert: feat(auth): 回退登录授权变动` |
 
+### 🛡️ 本地 Git 提交钩子守门 (Git Hooks)
+
+本项目通过 Git 原生钩子 [`.githooks/commit-msg`](./.githooks/commit-msg) 在本地提交阶段实时校验信息格式，零外部依赖（无需安装 Node.js、Husky 或 Python 环境）：
+- **一键激活**：运行 `bash scripts/setup.sh` 会自动激活；或在仓库根目录下手动执行：
+  ```bash
+  git config core.hooksPath .githooks
+  ```
+- **智能放行**：自动放行分支合并 (`Merge branch...`)、代码回退 (`Revert "..."`) 以及变基临时提交 (`fixup!` / `squash!`)；
+- **错误引导**：若提交信息不符合规范，钩子将中断提交、高亮输出格式诊断，并引导使用 `commit.sh` 快速组装。
+
 ### 💡 推荐：使用规范化提交助手
 
 本项目内置了 POSIX Bash 编写的提交助手 [scripts/commit.sh](./scripts/commit.sh)，同时支持**人工交互式向导**与 **AI / 自动化非交互式调用**：
@@ -95,22 +105,52 @@ bash scripts/commit.sh -t feat -s api -m "重构对外接口协议" -b -p -y
 - **PR 标题规范**：PR 标题必须同样遵循 [Conventional Commits](#2-commit-提交信息规范) 格式（如 `feat: 新增能力` 或 `fix: 修复缺陷`），CI 会对其进行自动化合规校验；
 - **模版填写**：发起 PR 时，请按模版完整填写变更背景、解决的问题以及关联的 Issue（如 `close #12`）；
 - **CI 绿灯**：确保 CI 流水线测试全部处于通过状态；
-- **审查与合并**：代码审查（Code Review）提出修改意见后，在原分支继续提交即可自动同步至 PR；合并后特性分支将被删除。
+- **审查与合并**：代码审查（Code Review）提出修改意见后，在原分支继续提交即可自动同步至 PR；合并后特性分支将被删除；
+- **推荐合并方式**：仓库推荐采用 **Squash and merge（压缩合并）**，合入时自动采用合规的 PR 标题作为主干提交信息，保证 Release 变更日志 100% 精确。
 
 ---
 
 ## 4. 版本发版机制与发布说明
 
-本项目通过 GitHub Actions 实现了现代化的**双通道自动化发版体系**：
-- **通道一（推荐首选）**：使用内置发版防呆脚本 `scripts/release.sh`，在本地完成严格前置自检（Pre-flight）、分支提交状态对齐、语义化版本推导、推送失败回滚防御与附注 Tag 推送；
-- **通道二（云端调度）**：在 GitHub 仓库 Actions 界面通过 `workflow_dispatch` 手动输入版本号一键触发发版；
-- **通道三（原生 Git）**：在本地通过原生 `git tag` & `git push` 命令触发。
+本项目通过 GitHub Actions 实现了现代化的**多通道自动化发版体系**：
+- **通道一（推荐首选，零脚本零终端依赖）**：在 GitHub 仓库 Actions 界面通过 `workflow_dispatch` 手动输入版本号一键触发发版；
+- **通道二（纯原生）**：在本地通过原生 `git tag` & `git push` 命令触发；
+- **通道三（进阶可选工具箱）**：使用内置发版防呆脚本 `scripts/release.sh`，在本地完成 5 重前置自检（Pre-flight）、分支提交状态对齐与多语言版本文件递增。
 
 ---
 
-### 🚀 方式一：使用本地发版防呆脚本（推荐首选）
+### 🌐 方式一：GitHub Actions 网页端云端调度发版 (推荐首选)
 
-项目提供了具备 5 重前置防呆自检的 POSIX Bash 发版脚本 [scripts/release.sh](./scripts/release.sh)。它能够自动校验当前是否处于 `main` 主干分支、工作区是否干净无未提交代码、本地是否落后或超前远端最新提交（超前提交自动同步）、目标 Tag 是否重名冲突，推送失败时自动回滚本地标签避免脏 Tag 阻塞，并智能推导下一个语义化版本（Patch/Minor/Major）：
+若维护者未在本地配置终端发版环境，可直接在 GitHub 网页端一键触发：
+1. 前往 GitHub 仓库页面，点击顶部 **Actions** 标签页；
+2. 在左侧选择 **Release** 流水线；
+3. 点击右侧蓝色的 **Run workflow** 下拉按钮；
+4. 在 **发布版本号** 输入框中填入目标版本号（如 `v1.2.0`）；
+5. 点击绿色 **Run workflow** 按钮启动流水线。
+GitHub Actions 将自动执行版本格式校验、在 `main` 当前提交显式创建并推送附注 Git Tag，随后自动提取日志完成 Release 发布。
+
+---
+
+### 🛠️ 方式二：原生 Git 命令行手动打标触发 (纯原生)
+
+若偏好纯手动敲命令，可按照标准步骤在本地打标并推送：
+
+```bash
+# 步骤 A：确保本地最新代码已推送到 main 分支且工作区干净
+git checkout main
+git pull origin main
+git push origin main
+
+# 步骤 B：打附注版本标签并推送到 GitHub (支持 v1.0.0, v1.0.0-beta.1 等)
+git tag -a v1.0.0 -m "Release v1.0.0"
+git push origin v1.0.0
+```
+
+---
+
+### 🚀 方式三 (进阶可选工具箱)：使用本地发版防呆脚本
+
+面向重度终端用户，项目提供了具备 5 重前置防呆自检的 POSIX Bash 发版脚本 [scripts/release.sh](./scripts/release.sh)。它能够自动校验当前是否处于 `main` 主干分支、工作区是否干净无未提交代码、本地是否落后或超前远端最新提交（超前提交自动同步）、目标 Tag 是否重名冲突，推送失败时自动回滚本地标签避免脏 Tag 阻塞，并智能推导下一个语义化版本（Patch/Minor/Major）：
 
 ```bash
 # 1. 安全演练模式（强烈推荐在正式发版前演练，只检查并打印拟执行动作，零污染 Git 历史）

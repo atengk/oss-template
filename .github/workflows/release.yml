@@ -138,16 +138,21 @@ jobs:
 #       with:
 #         distribution: 'temurin'
 #         java-version: '21'
-#         server-id: ossrh
-#         server-username: MAVEN_USERNAME
-#         server-password: MAVEN_PASSWORD
 #         gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
 #         gpg-passphrase: MAVEN_GPG_PASSPHRASE
+#     # 方式 A (推荐)：2024+ 现代化 Sonatype Central Portal (central.sonatype.com)
+#     # 使用 Central 发布插件 central-publishing-maven-plugin，配置 CENTRAL_USERNAME 与 CENTRAL_PASSWORD
 #     - run: mvn clean deploy -DskipTests -B
 #       env:
-#         MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
-#         MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
+#         CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+#         CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
 #         MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+#     # 方式 B (存量兼容)：传统 Sonatype OSSRH (s01.oss.sonatype.org / oss.sonatype.org)
+#     # - run: mvn clean deploy -DskipTests -B
+#     #   env:
+#     #     OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+#     #     OSSRH_TOKEN: ${{ secrets.OSSRH_TOKEN }}
+#     #     MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
 #
 # 3. 发布到 PyPI (Python)
 # ------------------------------------------------------------------------------
@@ -156,7 +161,7 @@ jobs:
 #   needs: github-release
 #   runs-on: ubuntu-latest
 #   permissions:
-#     id-token: write # PyPI Trusted Publisher (OIDC) 无需配置固定 Token
+#     id-token: write # PyPI Trusted Publisher (OIDC) 无需配置静态 Token，安全便捷
 #   steps:
 #     - uses: actions/checkout@v4
 #     - uses: actions/setup-python@v5
@@ -214,7 +219,7 @@ jobs:
 #           type=semver,pattern={{major}}
 #
 #     - name: 构建并推送多架构镜像 (amd64 / arm64)
-#       uses: docker/build-push-action@v5
+#       uses: docker/build-push-action@v6
 #       with:
 #         context: .
 #         push: true
@@ -244,7 +249,7 @@ jobs:
 #       with:
 #         go-version: '1.22'
 #     - name: 运行 GoReleaser (自动交叉编译全平台二进制与 Checksums)
-#       uses: goreleaser/goreleaser-action@v5
+#       uses: goreleaser/goreleaser-action@v6
 #       with:
 #         distribution: goreleaser
 #         version: latest

@@ -138,6 +138,12 @@ fi
 REPO_ROOT=$(git rev-parse --show-toplevel)
 cd "$REPO_ROOT"
 
+# 自动检测并注册本地 Git 提交规范钩子 (自愈机制)
+if [ -d ".githooks" ] && [ "$(git config core.hooksPath 2>/dev/null || echo '')" != ".githooks" ]; then
+  chmod +x .githooks/* 2>/dev/null || true
+  git config core.hooksPath .githooks 2>/dev/null || true
+fi
+
 # 检查 Git 提交者配置
 GIT_USER=$(git config user.name 2>/dev/null || echo "")
 GIT_EMAIL=$(git config user.email 2>/dev/null || echo "")

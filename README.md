@@ -33,12 +33,13 @@
 
 - 🎯 **技术栈纯净解耦**：无侵入式设计，不绑定任何特定语言运行时，保留统一的工程底座；
 - 🚀 **双通道自动化发版体系**：支持本地脚本驱动与云端网页调度（`workflow_dispatch`），打 Tag 自动触发发版、自动提取 PR/Commit 生成精美更新日志、自动挂载打包物附件；
-- 🛡️ **工程脚本三剑客（人机协同兼顾）**：内置初始化向导 `scripts/setup.sh`、规范提交助手 `scripts/commit.sh` 及发版防呆脚本 `scripts/release.sh`，全面支持交互式向导与静默参数（`-y`），既方便人工沉浸交互，又无缝兼容 AI Agent 与 CI 自动化调用；
-- 📦 **全场景分发体系预备**：内置 Maven Central、npmjs、PyPI、Docker (GHCR) 以及 GoReleaser (CLI) 与 GitHub Pages (前端/文档) 等 6 大分发流水线参考与凭据规范；
+- 🛡️ **双重提交守门与工程脚本（人机协同兼顾）**：内置原生 Git 钩子 `.githooks/commit-msg`（零外部依赖守门 Conventional Commits）、规范提交助手 `scripts/commit.sh`、初始化向导 `scripts/setup.sh` 及发版防呆脚本 `scripts/release.sh`，全面支持交互式向导与静默参数（`-y`），既方便人工沉浸交互，又无缝兼容 AI Agent 与 CI 自动化调用；
+- 📦 **全场景分发体系预备**：内置 Maven Central (Portal)、npmjs、PyPI、Docker (GHCR) 以及 GoReleaser (CLI) 与 GitHub Pages (前端/文档) 等 6 大分发流水线参考与凭据规范；
 - 🧹 **极简整洁**：全仓库仅保留必需的核心工程规范与脚本，无冗余配置与第三方运行时负担。
 
 ---
 
+<!-- TEMPLATE_SETUP_START -->
 ## 🛠️ 快速开始：基于本模版初始化新项目
 
 ### 1. 使用模版创建仓库
@@ -46,18 +47,44 @@
 
 > 🚀 **[点击一键基于本模版创建新仓库 (One-Click Generate)](https://github.com/atengk/oss-template/generate)**
 
-### 2. 全局替换模版默认信息
-克隆新仓库到本地后，推荐直接运行内置的初始化向导 [scripts/setup.sh](./scripts/setup.sh) 一键完成项目元数据与链接替换：
+### 2. 全局替换模版默认信息 (三选一)
+
+你可以自由选择以下任一方式初始化新项目：
+
+#### 🤖 方式 A：让 AI 编程助手一键初始化（强烈推荐！）
+如果你使用 Antigravity、Cursor、GitHub Copilot 或 Claude Code 等 AI 助手，直接复制下方指令发送给 AI 即可一步到位：
+
+> **📋 一键初始化 Prompt (直接复制发给 AI)：**
+> ```text
+> 请读取当前项目，帮我将该开源模版初始化为我的全新独立项目：
+> - GitHub 组织或用户名：<your-username>
+> - 仓库/项目名称：<your-repo>
+> - 作者姓名/版权所有者：<Your Name>
+> - 安全漏洞披露邮箱：<security@your-domain.com>
+> 
+> 执行要求：
+> 1. 全局精准替换上述元数据（包括 README.md、CONTRIBUTING.md、SECURITY.md、LICENSE、.github/ISSUE_TEMPLATE/config.yml 等）；
+> 2. 配置本地 Git 规范提交钩子：执行 git config core.hooksPath .githooks；
+> 3. 替换完成后，删除 scripts/setup.sh 脚本，并移除 README.md 中 <!-- TEMPLATE_SETUP_START --> 到 <!-- TEMPLATE_SETUP_END --> 之间的模版教学章节；
+> 4. 【可选极简选项】：如果我不打算使用 scripts/ 目录下的辅助脚本，请同时将 scripts/ 目录完整物理删除（本项目完全支持纯原生 Git 与 GitHub Web 网页端零脚本开发）。
+> ```
+
+#### 🛠️ 方式 B：使用内置向导脚本 (scripts/setup.sh)
+克隆新仓库到本地后，直接运行内置向导自动探测环境、安全替换并激活 Git 钩子：
 
 ```bash
-# 方式 A：交互式向导（推荐人工使用，自动探测当前环境默认值并引导确认）
+# 交互式向导（引导输入，支持初始化完成后一键自毁向导脚本并创建初始提交）
 bash scripts/setup.sh
 
-# 方式 B：命令行静默执行（适合 AI 智能助手或 CI 自动化脚本执行）
-bash scripts/setup.sh -u my-org -r my-awesome-tool -a "Zhang San" -y
+# 命令行静默执行（适合 CI / 自动化脚本执行）
+bash scripts/setup.sh -u my-org -r my-awesome-tool -a "Zhang San" -e "security@my-org.com" -y
+
+# 静默执行并在完成后自动清理向导脚本并创建初始提交
+bash scripts/setup.sh -u my-org -r my-awesome-tool --clean -y
 ```
 
-> 💡 你也可以在 IDE 中全局搜索以下默认值进行手动替换：
+#### ✍️ 方式 C：纯手动或 IDE 全局搜索替换
+在 IDE 中全局搜索以下默认值进行手动替换：
 
 | 搜索内容（当前默认值） | 替换为你自己的内容 | 说明 | 示例 |
 | :--- | :--- | :--- | :--- |
@@ -67,56 +94,74 @@ bash scripts/setup.sh -u my-org -r my-awesome-tool -a "Zhang San" -y
 | `Ateng` | `Your Name` | 作者称谓 / 版权所有者 | `Zhang San` |
 | `security@example.com` | `your-security-email` | 安全漏洞私密联络邮箱 (SECURITY.md) | `security@my-org.com` |
 
+手动替换完成后，推荐在本地终端执行一次以下命令激活提交守护：
+```bash
+git config core.hooksPath .githooks
+```
+
 ### 3. 配置业务构建与测试插槽
 打开 [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)，找到对应的技术栈区域（Node.js / Java / Go / Python），解除对应步骤的注释并填入你的构建/测试命令即可。
 
-### 4. 开启 GitHub Actions 写入权限（关键避坑）
+### 4. 开启 GitHub 仓库设置（关键避坑与日志银弹）
 
 > [!IMPORTANT]
-> **发版流水线必须的前置配置**：GitHub 新建仓库默认的 Actions 权限为只读。为确保打 Tag 时发版流水线能自动创建 GitHub Release 并上传附件，必须开启写入权限：
-> 1. 前往仓库 **Settings -> Actions -> General -> Workflow permissions**；
-> 2. 勾选 **Read and write permissions** 并点击保存。
+> **1. 开启发版流水线写入权限 (必须)**：
+> GitHub 新建仓库默认的 Actions 权限为只读。为确保打 Tag 时发版流水线能自动创建 GitHub Release 并上传附件，必须开启写入权限：
+> - 前往仓库 **Settings -> Actions -> General -> Workflow permissions**；
+> - 勾选 **Read and write permissions** 并点击保存。
+> 
+> **2. 推荐开启 Squash and merge 压缩合并 (零脚本日志银弹，强烈推荐)**：
+> 如果你在日常开发中不想跑任何本地提交脚本，也不想强迫团队成员安装本地钩子，建议开启 GitHub 默认压缩合并：
+> - 前往仓库 **Settings -> General -> Pull Requests**；
+> - 勾选 **Allow squash merging**，并将默认提交信息设置为 **Pull request title and description**；
+> - **收益**：开发者在本地无论怎么自由提交，只要通过 PR 合并，主干上的提交信息就会自动被规范的 PR 标题替换（PR 标题由 CI 自动守门），零脚本也能 100% 保证发版更新日志精美准确！
 
-### 5. 日常规范化提交 (使用 commit.sh)
-日常编码后，推荐直接运行内置的规范提交助手 [scripts/commit.sh](./scripts/commit.sh)，规范组装 Conventional Commits 提交信息：
+### 5. 日常规范化提交 (原生 Git 与可选 commit.sh)
+- **方式 A (推荐日常首选)**：直接使用 IDE 图形界面或命令行原生 `git commit`（只要配置了上述 Squash and merge 或运行过 `git config core.hooksPath .githooks`，提交完全自由受控）；
+- **方式 B (进阶可选工具箱)**：运行内置的规范提交助手 [scripts/commit.sh](./scripts/commit.sh)，通过编号菜单引导选择类型、范围与描述：
+  ```bash
+  bash scripts/commit.sh
+  ```
 
-```bash
-# 交互式向导（推荐日常使用，编号菜单引导选择类型、范围与描述）
-bash scripts/commit.sh
-
-# 非交互式命令行（适合 AI 智能助手或熟手快速提交）
-git add <file-path>
-bash scripts/commit.sh -t feat -s core -m "新增功能描述" -p -y
-```
-
-> 💡 更多提交选项与规范细节，请参阅 [贡献指南 (CONTRIBUTING.md)](./CONTRIBUTING.md#2-commit-提交信息规范)。
+> 💡 **关于零脚本 / 脚本吃灰模式的特别说明**：
+> 本项目中所有的 `scripts/`（`commit.sh`、`release.sh`、`setup.sh`）均为**可选语法糖**！
+> 即使你将它们**就放在 `scripts/` 目录中完全不跑也不删**，也**完全不会影响项目任何功能**：
+> - `setup.sh` 内置了已初始化自锁检测，不会被协作者意外误跑；
+> - 提交与发版完全由原生 Git 与 GitHub 网页端承接；
+> - CI 流水线具备自适应容错，测试与发版 100% 畅通无阻！
+<!-- TEMPLATE_SETUP_END -->
 
 ---
 
 ## 🚀 版本发版与发布指南
 
-本项目支持**双通道自动化发版**，无需手动在网页编辑 Release 笔记：
+本项目支持多种发版路径，你可以根据习惯自由选择：
 
-### 推荐：使用本地发版防呆脚本
-通过内置脚本进行自动化前置自检（分支合规、工作区清洁度、远端同步状态与 Tag 重名检测），并智能推导下一个语义化版本：
+### 方式一：GitHub 网页端一键发版 (推荐首选，零脚本零终端依赖)
+无需在本地敲任何命令或安装任何工具，随时随地在浏览器中即可一键发布新版本：
+1. 前往 GitHub 仓库页面，点击顶部 **Actions** 标签页；
+2. 在左侧选择 **Release** 流水线；
+3. 点击右侧蓝色的 **Run workflow** 下拉按钮；
+4. 在 **发布版本号** 输入框中填入目标版本号（如 `v1.0.0`），点击绿色按钮启动即可。
 
+### 方式二：原生 Git 命令行手动打标发版 (纯原生)
+确保本地最新代码已推送至 `main` 分支后，直接运行标准 Git 命令：
 ```bash
-# 1. 安全演练模式（强烈推荐：仅检查和预览拟执行命令，零污染 Git 历史）
-bash scripts/release.sh --dry-run
-
-# 2. 交互式发版向导（自动推导 Patch / Minor / Major 版本或自定义输入）
-bash scripts/release.sh
-
-# 3. 指定版本号发版（支持 -y 跳过交互确认，方便 AI Agent / CI 自动化调用）
-bash scripts/release.sh v1.0.0
-bash scripts/release.sh v1.0.0 -y
+git tag -a v1.0.0 -m "Release v1.0.0"
+git push origin v1.0.0
 ```
 
-> 💡 **云端与原生替代方案**：
-> - **云端网页触发**：访问仓库 **Actions -> Release -> Run workflow**，输入版本号即可一键自动打标并发版；
-> - **原生 Git 命令**：确保工作区干净后直接运行 `git tag -a v1.0.0 -m "Release v1.0.0" && git push origin v1.0.0`。
-> 
-> 更多多语言版本文件递增（Maven/npm/Cargo/Poetry 等）配置说明，请参阅 [贡献指南 (CONTRIBUTING.md)](./CONTRIBUTING.md#4-版本发版机制与发布说明)。
+### 方式三 (进阶可选工具箱)：使用本地发版防呆脚本 (scripts/release.sh)
+面向重度终端用户，提供 5 重前置防呆自检（分支合规、工作区洁净度、超前提交对齐、Tag 重名检测）与多语言工程版本文件递增（`custom_bump_version`）：
+```bash
+# 安全演练模式（仅检查并预览拟执行命令，零污染 Git 历史）
+bash scripts/release.sh --dry-run
+
+# 交互式发版向导（自动推导 Patch / Minor / Major 版本）
+bash scripts/release.sh
+```
+
+---
 
 GitHub Actions 将会自动执行 [`.github/workflows/release.yml`](./.github/workflows/release.yml)：
 1. 提取自上一版本以来的全部合并 PR 与提交记录；
@@ -139,9 +184,12 @@ GitHub Actions 将会自动执行 [`.github/workflows/release.yml`](./.github/wo
 │   │   ├── feature_request.md      # 新特性建议模版
 │   │   └── config.yml              # Issue 治理配置 (关闭空白 Issue & 导流 Discussions)
 │   ├── workflows/
-│   │   ├── ci.yml                  # 业务构建测试（含 PR 标题规范校验与脚本语法守门）
+│   │   ├── ci.yml                  # 业务构建测试（含 PR 标题与 Shell 语法守门）
 │   │   └── release.yml             # 自动化发版、生成更新日志与分发流水线（含双通道发版与 6 大场景分发参考）
+│   ├── dependabot.yml              # GitHub Actions 依赖月度自动巡检配置
 │   └── PULL_REQUEST_TEMPLATE.md    # Pull Request 提交模版
+├── .githooks/
+│   └── commit-msg                  # Git 原生提交规范守护钩子 (免外部依赖)
 ├── scripts/
 │   ├── commit.sh                   # 规范化提交助手 (支持交互向导与非交互式/AI自动化调用)
 │   ├── release.sh                  # 全生命周期发版防呆脚本 (含 Pre-flight 自检、回滚防御与生态插槽)
