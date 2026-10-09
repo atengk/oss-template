@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - name: 检出源码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -116,7 +116,7 @@ jobs:
 #     contents: read
 #     id-token: write # 现代 npm Trusted Publishing (OIDC) 所需权限
 #   steps:
-#     - uses: actions/checkout@v4
+#     - uses: actions/checkout@v7
 #     - uses: actions/setup-node@v4
 #       with:
 #         node-version: 20
@@ -133,7 +133,7 @@ jobs:
 #   needs: github-release
 #   runs-on: ubuntu-latest
 #   steps:
-#     - uses: actions/checkout@v4
+#     - uses: actions/checkout@v7
 #     - uses: actions/setup-java@v4
 #       with:
 #         distribution: 'temurin'
@@ -163,7 +163,7 @@ jobs:
 #   permissions:
 #     id-token: write # PyPI Trusted Publisher (OIDC) 无需配置静态 Token，安全便捷
 #   steps:
-#     - uses: actions/checkout@v4
+#     - uses: actions/checkout@v7
 #     - uses: actions/setup-python@v5
 #       with:
 #         python-version: '3.11'
@@ -181,7 +181,7 @@ jobs:
 #     packages: write # 推送至 GitHub Container Registry (ghcr.io) 所需权限
 #   steps:
 #     - name: 检出代码 (全量检出供 SemVer 版本比对)
-#       uses: actions/checkout@v4
+#       uses: actions/checkout@v7
 #       with:
 #         fetch-depth: 0
 #
@@ -241,7 +241,7 @@ jobs:
 #     contents: write # 上传二进制附件至 Release 所需权限
 #   steps:
 #     - name: 检出代码
-#       uses: actions/checkout@v4
+#       uses: actions/checkout@v7
 #       with:
 #         fetch-depth: 0
 #     - name: 安装 Go
@@ -272,7 +272,7 @@ jobs:
 #     url: ${{ steps.deployment.outputs.page_url }}
 #   steps:
 #     - name: 检出代码
-#       uses: actions/checkout@v4
+#       uses: actions/checkout@v7
 #     - name: 安装 Node.js
 #       uses: actions/setup-node@v4
 #       with:
