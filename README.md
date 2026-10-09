@@ -69,7 +69,7 @@
   > 执行要求：
   > 1. 全局精准替换上述元数据（包括 README.md、CODE_OF_CONDUCT.md、CONTRIBUTING.md、SECURITY.md、LICENSE、.github/ISSUE_TEMPLATE/config.yml 等）；
   > 2. 配置本地 Git 规范提交钩子：执行 git config core.hooksPath .githooks；
-  > 3. 运行 bash scripts/setup.sh --clean -y 自动完成模版教学章节裁剪、清理 setup.sh 并创建初始提交；
+  > 3. 运行 bash scripts/setup.sh --clean -y 自动完成模版教学章节裁剪、清理 setup.sh 并创建初始提交（若偏好纯原生零脚本模式，可使用 --clean-all 一键彻底删除 scripts/ 目录）；
   > 4. 【可选极简选项】：如果我不打算使用 scripts/ 目录下的辅助脚本，请同时将 scripts/ 目录完整物理删除（本项目完全支持纯原生 Git 与 GitHub Web 网页端零脚本开发）。
   > ```
 
@@ -81,6 +81,12 @@
 
   # 命令行静默执行并在完成后自动清理向导脚本、注入业务骨架并创建初始提交
   bash scripts/setup.sh -u my-org -r my-awesome-tool --clean -y
+
+  # 纯原生零脚本模式 (初始化完成后自动裁剪教学并彻底删除 scripts/ 目录)
+  bash scripts/setup.sh -u my-org -r my-awesome-tool --clean-all -y
+
+  # 强制重新配置/覆盖更新已有设置 (若此前已初始化过)
+  bash scripts/setup.sh -u my-org -r my-awesome-tool -f -y
   ```
 
 - **✍️ 方式 C：纯手动或 IDE 全局搜索替换**
@@ -169,7 +175,7 @@
 1. 前往 GitHub 仓库页面，点击顶部 **Actions** 标签页；
 2. 在左侧选择 **Release** 流水线；
 3. 点击右侧蓝色的 **Run workflow** 下拉按钮；
-4. 在 **发布版本号** 输入框中填入目标版本号（如 `v1.0.0`），点击绿色按钮启动即可。
+4. 在 **发布版本号** 输入框中填入目标版本号（如 `v1.0.0`），点击绿色按钮启动即可（流水线内置严格分支防呆校验，自动拦截非默认主干分支的误触发版，且全局发版互斥保障产物原子性）。
 
 ### 方式二：原生 Git 命令行手动打标发版 (纯原生)
 确保本地最新代码已推送至 `main` 分支后，直接运行标准 Git 命令：

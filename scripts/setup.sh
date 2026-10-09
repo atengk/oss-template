@@ -55,6 +55,8 @@ NEW_EMAIL=""
 AUTO_CONFIRM=false
 DRY_RUN=false
 CLEAN_AFTER_SETUP=false
+CLEAN_ALL_SCRIPTS=false
+FORCE_SETUP=false
 
 show_help() {
   printf "%b\n" "用法: bash scripts/setup.sh [选项]"
@@ -64,8 +66,10 @@ show_help() {
   printf "%b\n" "  -r, --repo <repo>       仓库/项目名称 (例如 my-awesome-tool)"
   printf "%b\n" "  -a, --author <author>   作者称谓或版权所有者 (例如 Zhang San)"
   printf "%b\n" "  -e, --email <email>     安全漏洞联络邮箱 (例如 security@my-org.com)"
+  printf "%b\n" "  -f, --force             强制重新执行向导（跳过已初始化自锁检测，支持覆盖更新配置）"
   printf "%b\n" "  --clean, --self-destruct 初始化完成后裁剪 README 模版教学章节、删除 setup.sh 并自动创建初始提交"
-  printf "%b\n" "  -y, --yes               跳过确认提示，直接执行替换 (注意: 默认不自毁，需显式加 --clean)"
+  printf "%b\n" "  --clean-all, --no-scripts 初始化完成后裁剪模版教学章节、彻底删除 scripts/ 目录并创建初始提交（零脚本纯原生）"
+  printf "%b\n" "  -y, --yes               跳过确认提示，直接执行替换 (注意: 默认不自毁，需显式加 --clean 或 --clean-all)"
   printf "%b\n" "  -n, --dry-run           演练模式，仅预览拟替换内容，不修改任何文件"
   printf "%b\n" "  -h, --help              显示帮助信息"
   printf "%b\n" ""
@@ -75,6 +79,8 @@ show_help() {
   printf "%b\n" "非交互式调用示例 (AI / 自动化执行):"
   printf "%b\n" "  bash scripts/setup.sh -u my-org -r my-project -a \"Zhang San\" -e \"sec@my-org.com\" -y"
   printf "%b\n" "  bash scripts/setup.sh -u my-org -r my-project --clean -y"
+  printf "%b\n" "  bash scripts/setup.sh -u my-org -r my-project --clean-all -y"
+  printf "%b\n" "  bash scripts/setup.sh -u my-org -r my-project -f -y"
   printf "%b\n" "  bash scripts/setup.sh -u my-org -r my-project --dry-run"
 }
 
@@ -96,8 +102,17 @@ while [ $# -gt 0 ]; do
       NEW_EMAIL="$2"
       shift 2
       ;;
+    -f|--force)
+      FORCE_SETUP=true
+      shift
+      ;;
     --clean|--self-destruct)
       CLEAN_AFTER_SETUP=true
+      shift
+      ;;
+    --clean-all|--no-scripts)
+      CLEAN_AFTER_SETUP=true
+      CLEAN_ALL_SCRIPTS=true
       shift
       ;;
     -y|--yes)
@@ -138,15 +153,47 @@ fi
 cd "$REPO_ROOT"
 
 # 防误触与自锁防御：检测当前仓库是否已被初始化过
+IS_INITIALIZED=false
 if [ -f "README.md" ] && ! grep -q "atengk/oss-template" "README.md" 2>/dev/null; then
+  IS_INITIALIZED=true
+fi
+
+if [ "$IS_INITIALIZED" = true ] && [ "$FORCE_SETUP" = false ]; then
   log_info "检测到当前项目已完成初始化（README.md 中已无模版默认占位符）。"
-  log_info "无需再次运行 setup.sh，向导已安全退出。"
+  log_info "若需强制重新配置或覆盖更新，请追加 -f 或 --force 参数："
+  log_info "  示例: bash scripts/setup.sh -f"
+  log_info "向导已安全退出。"
   exit 0
+fi
+
+# 在 --force 强制覆盖或二次执行模式下，探测当前实际已写入的值供安全覆盖
+CURR_OWNER=""
+CURR_REPO=""
+CURR_AUTHOR=""
+CURR_EMAIL=""
+
+if [ -f "SECURITY.md" ]; then
+  if grep -q "github\.com/[^/]\+/[^/]\+/security/advisories" "SECURITY.md" 2>/dev/null; then
+    PREV_SLUG=$(grep -oE "github\.com/[^/]+/[^/]+/security/advisories" "SECURITY.md" | head -n 1 | sed -e 's#github.com/##' -e 's#/security/advisories##')
+    CURR_OWNER=$(echo "$PREV_SLUG" | cut -d'/' -f1)
+    CURR_REPO=$(echo "$PREV_SLUG" | cut -d'/' -f2)
+  fi
+  if grep -q "安全联系邮箱" "SECURITY.md" 2>/dev/null; then
+    CURR_EMAIL=$(grep -oE '`[^`]+@[^`]+`' "SECURITY.md" | head -n 1 | tr -d '`')
+  fi
+fi
+
+if [ -f "LICENSE" ]; then
+  if grep -q "Copyright [0-9]\+ " "LICENSE" 2>/dev/null; then
+    CURR_AUTHOR=$(grep -oE "Copyright [0-9]+ [^(]+" "LICENSE" | head -n 1 | sed -e 's/Copyright [0-9]* //' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+  fi
 fi
 
 DETECTED_REPO=$(basename "$REPO_ROOT")
 if [ "$DETECTED_REPO" = "oss-template" ]; then
   DETECTED_REPO=""
+elif [ -n "$CURR_REPO" ] && [ "$CURR_REPO" != "oss-template" ]; then
+  DETECTED_REPO="$CURR_REPO"
 fi
 
 DETECTED_OWNER=""
@@ -161,15 +208,24 @@ if [[ "$REMOTE_URL" =~ github\.com[:/]([^/]+)/([^/.]+) ]]; then
     DETECTED_REPO="$REMOTE_NAME"
   fi
 fi
+if [ -z "$DETECTED_OWNER" ] && [ -n "$CURR_OWNER" ] && [ "$CURR_OWNER" != "atengk" ]; then
+  DETECTED_OWNER="$CURR_OWNER"
+fi
 
 DETECTED_AUTHOR=$(git config --get user.name 2>/dev/null || echo "")
 if [ "$DETECTED_AUTHOR" = "Ateng" ]; then
   DETECTED_AUTHOR=""
 fi
+if [ -z "$DETECTED_AUTHOR" ] && [ -n "$CURR_AUTHOR" ] && [ "$CURR_AUTHOR" != "Ateng" ]; then
+  DETECTED_AUTHOR="$CURR_AUTHOR"
+fi
 
 DETECTED_EMAIL=$(git config --get user.email 2>/dev/null || echo "")
 if [ "$DETECTED_EMAIL" = "security@example.com" ]; then
   DETECTED_EMAIL=""
+fi
+if [ -z "$DETECTED_EMAIL" ] && [ -n "$CURR_EMAIL" ] && [ "$CURR_EMAIL" != "security@example.com" ]; then
+  DETECTED_EMAIL="$CURR_EMAIL"
 fi
 
 # ==============================================================================
@@ -369,6 +425,7 @@ TARGET_FILES=(
   "CONTRIBUTING.md"
   "SECURITY.md"
   "LICENSE"
+  ".cliff.toml"
   ".githooks/commit-msg"
   "scripts/commit.sh"
   "scripts/release.sh"
@@ -382,10 +439,29 @@ for file in "${TARGET_FILES[@]}"; do
   if [ -f "$file" ]; then
     # 按照先后顺序替换：先替换复合路径与邮箱，再替换独立单词
     safe_replace "$file" "atengk/oss-template" "${NEW_OWNER}/${NEW_REPO}"
+    if [ -n "$CURR_OWNER" ] && [ -n "$CURR_REPO" ]; then
+      safe_replace "$file" "${CURR_OWNER}/${CURR_REPO}" "${NEW_OWNER}/${NEW_REPO}"
+    fi
+
     safe_replace "$file" "atengk" "${NEW_OWNER}"
+    if [ -n "$CURR_OWNER" ]; then
+      safe_replace "$file" "${CURR_OWNER}" "${NEW_OWNER}"
+    fi
+
     safe_replace "$file" "oss-template" "${NEW_REPO}"
+    if [ -n "$CURR_REPO" ]; then
+      safe_replace "$file" "${CURR_REPO}" "${NEW_REPO}"
+    fi
+
     safe_replace "$file" "Ateng" "${NEW_AUTHOR}"
+    if [ -n "$CURR_AUTHOR" ]; then
+      safe_replace "$file" "${CURR_AUTHOR}" "${NEW_AUTHOR}"
+    fi
+
     safe_replace "$file" "security@example.com" "${NEW_EMAIL}"
+    if [ -n "$CURR_EMAIL" ]; then
+      safe_replace "$file" "${CURR_EMAIL}" "${NEW_EMAIL}"
+    fi
     log_success "已完成更新: $file"
   fi
 done
@@ -407,14 +483,23 @@ printf "\n%b\n" "${COLOR_BOLD}${COLOR_GREEN}====================================
 printf "%b\n" "${COLOR_BOLD}${COLOR_GREEN}               🎉 模版初始化占位符替换圆满完成！                ${COLOR_RESET}"
 printf "%b\n" "${COLOR_BOLD}${COLOR_GREEN}================================================================${COLOR_RESET}"
 
-# 交互模式下询问是否自清理（若命令行未传 --clean）
+# 交互模式下询问是否自清理（若命令行未传 --clean 或 --clean-all）
 if [ "$CLEAN_AFTER_SETUP" = false ] && [ -t 0 ] && [ "$AUTO_CONFIRM" = false ]; then
-  printf "\n%b是否清理模版向导 (自动裁剪 README 模版教学章节、删除 scripts/setup.sh 并创建初始提交)? [y/N]: %b" "${COLOR_BOLD}" "${COLOR_RESET}"
+  printf "\n%b是否清理模版向导与脚本?%b\n" "${COLOR_BOLD}" "${COLOR_RESET}"
+  printf "  %b1)%b 裁剪 README 并删除 setup.sh (保留日常提交与发版助手 commit.sh / release.sh)\n" "${COLOR_CYAN}" "${COLOR_RESET}"
+  printf "  %b2)%b 纯原生零脚本模式 (裁剪 README 并彻底删除整个 scripts/ 目录)\n" "${COLOR_CYAN}" "${COLOR_RESET}"
+  printf "  %b0)%b 保留所有脚本与模版教学，稍后手动处理 [默认]\n\n" "${COLOR_YELLOW}" "${COLOR_RESET}"
+  printf "请输入选项 [0-2]: "
   read -r CLEAN_PROMPT
   CLEAN_PROMPT=$(echo "$CLEAN_PROMPT" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
   case "$CLEAN_PROMPT" in
-    [yY][eE][sS]|[yY])
+    1|[yY]|[yY][eE][sS])
       CLEAN_AFTER_SETUP=true
+      CLEAN_ALL_SCRIPTS=false
+      ;;
+    2)
+      CLEAN_AFTER_SETUP=true
+      CLEAN_ALL_SCRIPTS=true
       ;;
     *)
       CLEAN_AFTER_SETUP=false
@@ -423,12 +508,21 @@ if [ "$CLEAN_AFTER_SETUP" = false ] && [ -t 0 ] && [ "$AUTO_CONFIRM" = false ]; 
 fi
 
 if [ "$CLEAN_AFTER_SETUP" = true ]; then
-  log_info "正在裁剪模版教学章节并清理初始化向导..."
-  replace_template_section_in_readme
-  rm -f "$REPO_ROOT/scripts/setup.sh"
-  git add -A
-  git commit -m "chore: initialize repository from template"
-  log_success "已安全裁剪 README.md、删除 scripts/setup.sh 并自动完成初始化提交！"
+  if [ "$CLEAN_ALL_SCRIPTS" = true ]; then
+    log_info "正在执行纯原生零脚本模式清理 (彻底删除 scripts/ 目录并裁剪 README)..."
+    replace_template_section_in_readme
+    rm -rf "$REPO_ROOT/scripts"
+    git add -A
+    git commit -m "chore: initialize repository from template (pure git zero-script mode)"
+    log_success "已安全裁剪 README.md 并彻底删除 scripts/ 目录完成初始提交！"
+  else
+    log_info "正在裁剪模版教学章节并清理初始化向导..."
+    replace_template_section_in_readme
+    rm -f "$REPO_ROOT/scripts/setup.sh"
+    git add -A
+    git commit -m "chore: initialize repository from template"
+    log_success "已安全裁剪 README.md、删除 scripts/setup.sh 并自动完成初始化提交！"
+  fi
   printf "\n仓库现已整洁就绪。推荐后续操作:\n"
   printf "  1. 打开 %bREADME.md%b 补充完善你的业务功能介绍与安装步骤；\n" "${COLOR_CYAN}" "${COLOR_RESET}"
   printf "  2. 打开 %b.github/workflows/ci.yml%b 配置你的业务构建与测试步骤；\n" "${COLOR_CYAN}" "${COLOR_RESET}"

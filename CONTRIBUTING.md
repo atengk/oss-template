@@ -127,7 +127,7 @@ bash scripts/commit.sh -t feat -s api -m "重构对外接口协议" -b -p -y
 3. 点击右侧蓝色的 **Run workflow** 下拉按钮；
 4. 在 **发布版本号** 输入框中填入目标版本号（如 `v1.2.0`）；
 5. 点击绿色 **Run workflow** 按钮启动流水线。
-GitHub Actions 将自动执行版本格式校验、在 `main` 当前提交显式创建并推送附注 Git Tag，随后自动提取日志完成 Release 发布。
+GitHub Actions 将自动执行版本格式与触发分支校验（自动拦截非默认主干分支上的误操作）、在当前主干提交显式创建并推送附注 Git Tag，随后自动提取日志完成 Release 发布。
 
 ---
 
@@ -175,7 +175,7 @@ bash scripts/release.sh v1.0.0 -y
 
 ### ⚙️ 自动化流水线运行
 标签推送后，GitHub Actions 将会自动执行 [`.github/workflows/release.yml`](./.github/workflows/release.yml)：
-- 自动提取自上一版本以来的全部提交与 PR，由 `git-cliff` 格式化为发布日志；
+- 自动提取自上一版本以来的全部提交与 PR，由 `git-cliff` 关联 PR 链接与新贡献者致谢，格式化为发布日志；
 - 自动创建 GitHub Release 并挂载发布内容；
 - 将打包产物与 `checksums.txt` 挂载至附件（若配置了构建步骤）；
 - 分发至官方中心仓库或平台（若配置了对应发布 Job）。

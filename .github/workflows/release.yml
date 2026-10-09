@@ -11,6 +11,11 @@ on:
         required: true
         type: string
 
+# 并发控制：同一时间全局仅允许一个发版任务运行，禁止取消正在执行的任务以确保产物完整性与原子性
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -32,6 +37,17 @@ jobs:
         id: release-meta
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # 严格防呆自检：阻断在非主干分支误触发发版
+            CURRENT_REF="${{ github.ref_name }}"
+            DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+            if [ -n "$DEFAULT_BRANCH" ] && [ "$CURRENT_REF" != "$DEFAULT_BRANCH" ]; then
+              echo "::error::禁止在非默认主干分支 [$CURRENT_REF] 触发发版！默认主干为 [$DEFAULT_BRANCH]，请切换至主干分支后重试。"
+              exit 1
+            elif [ -z "$DEFAULT_BRANCH" ] && [ "$CURRENT_REF" != "main" ] && [ "$CURRENT_REF" != "master" ]; then
+              echo "::error::禁止在非主干分支 [$CURRENT_REF] 触发发版！仅允许在 main 或 master 分支发版。"
+              exit 1
+            fi
+
             TAG_NAME="${{ inputs.version }}"
             # 自动补全前缀 v
             if [[ "$TAG_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
@@ -79,9 +95,10 @@ jobs:
         id: git-cliff
         with:
           config: .cliff.toml
-          args: --tag ${{ steps.release-meta.outputs.tag_name }} --latest --strip header
+          args: --tag ${{ steps.release-meta.outputs.tag_name }} --latest --strip header --github-repo ${{ github.repository }}
         env:
           OUTPUT: CHANGELOG_RELEASE.md
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 创建 GitHub Release 并挂载发布内容
         uses: softprops/action-gh-release@v3
@@ -122,7 +139,15 @@ jobs:
 #         node-version: 20
 #         registry-url: 'https://registry.npmjs.org'
 #     - run: pnpm install && pnpm build
-#     - run: npm publish --access public
+#     - name: 发布至 npm (根据是否预发布自动分流 @next 或 @latest 防污染)
+#       run: |
+#         if [ "${{ needs.github-release.outputs.is_prerelease }}" = "true" ]; then
+#           echo "发布预发布版本至 npm (tag: next)..."
+#           npm publish --tag next --access public
+#         else
+#           echo "发布正式版本至 npm (tag: latest)..."
+#           npm publish --access public
+#         fi
 #       env:
 #         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 #
@@ -139,7 +164,7 @@ jobs:
 #         distribution: 'temurin'
 #         java-version: '21'
 #         gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
-#         gpg-passphrase: MAVEN_GPG_PASSPHRASE
+#         gpg-passphrase: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
 #     # 方式 A (推荐)：2024+ 现代化 Sonatype Central Portal (central.sonatype.com)
 #     # 使用 Central 发布插件 central-publishing-maven-plugin，配置 CENTRAL_USERNAME 与 CENTRAL_PASSWORD
 #     - run: mvn clean deploy -DskipTests -B
@@ -206,17 +231,19 @@ jobs:
 #     #     username: ${{ secrets.DOCKERHUB_USERNAME }}
 #     #     password: ${{ secrets.DOCKERHUB_TOKEN }}
 #
-#     - name: 提取 Docker 镜像元数据 (自动计算 Tag 与 Labels)
+#     - name: 提取 Docker 镜像元数据 (自动计算 Tag 与 Labels，含预发布大版本防污染)
 #       id: meta
 #       uses: docker/metadata-action@v5
 #       with:
 #         # 镜像目标：默认推送至 GHCR（免配置）；若需推送到 Docker Hub，在下方追加一行：your-username/your-image
 #         images: |
 #           ghcr.io/${{ github.repository }}
+#         flavor: |
+#           latest=${{ needs.github-release.outputs.is_prerelease != 'true' }}
 #         tags: |
 #           type=semver,pattern={{version}}
-#           type=semver,pattern={{major}}.{{minor}}
-#           type=semver,pattern={{major}}
+#           type=semver,pattern={{major}}.{{minor}},enable=${{ needs.github-release.outputs.is_prerelease != 'true' }}
+#           type=semver,pattern={{major}},enable=${{ needs.github-release.outputs.is_prerelease != 'true' }}
 #
 #     - name: 构建并推送多架构镜像 (amd64 / arm64)
 #       uses: docker/build-push-action@v6
