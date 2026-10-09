@@ -73,6 +73,11 @@ jobs:
             echo "已由 GitHub Actions 显式创建并推送标签: $TAG_NAME"
           else
             TAG_NAME="${{ github.ref_name }}"
+            # 语义化版本正则双重防呆：阻断非标原生标签误触发发版
+            if ! echo "$TAG_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
+              echo "::error::推送的标签 [$TAG_NAME] 不符合语义化版本规范！必须形如 v1.0.0 或 v1.0.0-rc.1，已安全终止发版流水线。"
+              exit 1
+            fi
           fi
 
           echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"

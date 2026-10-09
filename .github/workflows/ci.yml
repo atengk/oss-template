@@ -55,9 +55,13 @@ jobs:
             bash -n scripts/*.sh
             shellcheck --severity=warning scripts/*.sh
           fi
-          if ls .githooks/* >/dev/null 2>&1; then
-            bash -n .githooks/*
-            shellcheck --severity=warning .githooks/*
+          if [ -d .githooks ]; then
+            # 过滤仅对包含 Shell Shebang 的实际钩子脚本执行静态校验（自动跳过文档与占位文件）
+            HOOK_FILES=$(grep -l '^#!' .githooks/* 2>/dev/null || true)
+            if [ -n "$HOOK_FILES" ]; then
+              echo "$HOOK_FILES" | xargs -r bash -n
+              echo "$HOOK_FILES" | xargs -r shellcheck --severity=warning
+            fi
           fi
 
       # ========================================================================

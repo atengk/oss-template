@@ -130,7 +130,8 @@
 若偏好手动接入，只需将本模版的以下构件按需复制到你的项目中：
 1. **发版与日志**：复制 `.cliff.toml`、`scripts/release.sh` 与 `.github/workflows/release.yml`；
 2. **规范提交**：复制 `.githooks/commit-msg` 并执行 `git config core.hooksPath .githooks`（或直接使用 GitHub Squash Merge 软着陆）；
-3. **治理文档**：复制 `CODE_OF_CONDUCT.md`、`CONTRIBUTING.md`、`SECURITY.md` 并将其中占位符更新为你自己的项目信息。
+3. **治理文档**：复制 `CODE_OF_CONDUCT.md`、`CONTRIBUTING.md`、`SECURITY.md` 并将其中占位符更新为你自己的项目信息；
+4. **工程底座配置**：按需复制或增量合并 `.editorconfig`、`.gitattributes`、`.gitignore`、`.dockerignore` 与 `.github/dependabot.yml`。
 
 ---
 

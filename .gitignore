@@ -9,6 +9,18 @@
 ehthumbs.db
 Thumbs.db
 [Dd]esktop.ini
+tmp/
+temp/
+.tmp/
+.temp/
+*.tmp
+*.temp
+scratch/
+.scratch/
+scratchpad/
+.scratchpad/
+sandbox/
+.sandbox/
 
 # ==============================================================================
 # 编辑器与 IDE
@@ -91,4 +103,19 @@ venv/
 # Rust
 # ==============================================================================
 **/*.rs.bk
+
+# ==============================================================================
+# 测试覆盖率与代码分析缓存 (Coverage & Linters)
+# ==============================================================================
+coverage/
+*.lcov
+.nyc_output/
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.eslintcache
+
 
