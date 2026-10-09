@@ -6,9 +6,9 @@
 [changelog]
 header = ""
 body = """
-{% for group, commits in commits | group_by(attribute="group") %}
-### {{ group }}
-{% for commit in commits %}
+{% for entry in commits | commit_groups(groups=commit_parsers_groups) %}
+### {{ entry.group | trim }}
+{% for commit in entry.commits %}
 - {% if commit.scope %}**{{ commit.scope }}**: {% endif %}{{ commit.message | upper_first }} ({{ commit.id | truncate(length=7, end="") }})\
 {% endfor %}
 {% endfor %}\n
