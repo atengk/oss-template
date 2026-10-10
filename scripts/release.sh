@@ -301,17 +301,14 @@ if [ "$AHEAD_COUNT" -gt 0 ]; then
 fi
 printf "  拟执行动作   : 1. 执行工程版本更新钩子 (custom_bump_version)\n"
 printf "                 2. 创建附注标签: git tag -a %s -m \"Release %s\"\n" "$TARGET_VERSION" "$TARGET_VERSION"
-printf "                 3. 推送标签至远端: git push origin %s\n" "$TARGET_VERSION"
+printf "                 3. 原子同步分支与标签: git push origin %s %s\n" "$CURRENT_BRANCH" "$TARGET_VERSION"
 printf "                 4. 触发 GitHub Actions 自动发版与产物挂载流水线\n"
 printf "%b\n\n" "${COLOR_BOLD}${COLOR_CYAN}------------------------------------------------------------${COLOR_RESET}"
 
 if [ "$DRY_RUN" = true ]; then
-  if [ "$AHEAD_COUNT" -gt 0 ]; then
-    log_info "[DRY-RUN] 模拟执行 git push origin $CURRENT_BRANCH..."
-  fi
   log_info "[DRY-RUN] 模拟执行 custom_bump_version $RAW_VERSION..."
   log_info "[DRY-RUN] 模拟执行 git tag -a $TARGET_VERSION -m 'Release $TARGET_VERSION'..."
-  log_info "[DRY-RUN] 模拟执行 git push origin $TARGET_VERSION..."
+  log_info "[DRY-RUN] 模拟执行 git push origin $CURRENT_BRANCH $TARGET_VERSION (原子合并推送)..."
   log_success "[DRY-RUN] 演练完成！所有发版防呆检查均已通过，实际发版将按上述规划执行。"
   exit 0
 fi
@@ -333,44 +330,53 @@ else
 fi
 
 # ==============================================================================
-# 4. 执行版本号更新钩子与主干分支同步
+# 4. 执行版本号更新钩子与变更提交
 # ==============================================================================
 log_info "正在执行工程版本号更新钩子 (custom_bump_version)..."
 custom_bump_version "$RAW_VERSION"
 
 # 检查钩子是否修改了版本文件
 HOOK_CHANGES=$(git status --porcelain)
+NEED_PUSH_BRANCH=false
 if [ -n "$HOOK_CHANGES" ]; then
   log_info "检测到扩展钩子更新了工程文件，正在全量暂存并创建版本提交..."
   git add -A
   git commit -m "chore(release): bump version to $TARGET_VERSION"
-  log_info "正在将版本提交推送到 origin/$CURRENT_BRANCH..."
-  git push origin "$CURRENT_BRANCH"
-  log_success "工程版本提交已推送到主干分支。"
+  NEED_PUSH_BRANCH=true
 elif [ "$AHEAD_COUNT" -gt 0 ]; then
-  log_info "正在将本地主干超前提交推送到 origin/$CURRENT_BRANCH..."
-  git push origin "$CURRENT_BRANCH"
-  log_success "主干超前提交已同步至远端。"
+  log_info "检测到本地有 $AHEAD_COUNT 个超前提交，将随发版标签一同推送到远端..."
+  NEED_PUSH_BRANCH=true
 else
   log_info "未检测到工程文件变动（当前工程保持无版本文件模式）。"
 fi
 
 # ==============================================================================
-# 5. 打标签与推送 (含推送失败自动回滚)
+# 5. 打标签与原子推送 (含推送失败自动回滚)
 # ==============================================================================
 log_info "正在创建附注 Git Tag: $TARGET_VERSION..."
 git tag -a "$TARGET_VERSION" -m "Release $TARGET_VERSION"
 
-log_info "正在推送标签到远程仓库 (git push origin $TARGET_VERSION)..."
-if ! git push origin "$TARGET_VERSION"; then
-  log_error "推送标签 $TARGET_VERSION 到远程仓库失败！"
-  log_warn "正在自动回滚本地标签，以防本地脏 Tag 阻塞后续发版..."
-  git tag -d "$TARGET_VERSION" >/dev/null 2>&1 || true
-  log_error "发版中断：标签推送失败，本地标签已安全清理。"
-  exit 1
+if [ "$NEED_PUSH_BRANCH" = true ]; then
+  log_info "正在原子推送主干变更与版本标签 (git push origin $CURRENT_BRANCH $TARGET_VERSION)..."
+  if ! git push origin "$CURRENT_BRANCH" "$TARGET_VERSION"; then
+    log_error "原子推送分支与标签到远程仓库失败！"
+    log_warn "正在自动回滚本地标签，以防本地脏 Tag 阻塞后续发版..."
+    git tag -d "$TARGET_VERSION" >/dev/null 2>&1 || true
+    log_error "发版中断：推送失败，本地标签已安全清理。"
+    exit 1
+  fi
+  log_success "主干变更与版本标签已原子同步至远端。"
+else
+  log_info "正在推送标签到远程仓库 (git push origin $TARGET_VERSION)..."
+  if ! git push origin "$TARGET_VERSION"; then
+    log_error "推送标签 $TARGET_VERSION 到远程仓库失败！"
+    log_warn "正在自动回滚本地标签，以防本地脏 Tag 阻塞后续发版..."
+    git tag -d "$TARGET_VERSION" >/dev/null 2>&1 || true
+    log_error "发版中断：标签推送失败，本地标签已安全清理。"
+    exit 1
+  fi
+  log_success "版本标签推送成功！"
 fi
-
-log_success "标签推送成功！"
 
 # 获取远端仓库地址生成 GitHub Release 网页直达链接
 REMOTE_URL=$(git config --get remote.origin.url || echo "")

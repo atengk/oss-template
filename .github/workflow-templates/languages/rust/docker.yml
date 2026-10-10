@@ -10,6 +10,7 @@
 #   - 开箱即用支持 Docker Hub 双源发布扩展 (取消注释即可启用)
 #   - QEMU + Docker Buildx 多架构交叉编译与 GHA 缓存加速
 #   - provenance: false & sbom: false 策略，确保产物纯净并杜绝私有镜像仓库 unknown 幽灵标签
+#   - 内置单/多分支拓扑防双跑感知门禁：发版时分支流水线自动让步，消灭镜像竞态与算力浪费
 # ==============================================================================
 
 name: Rust Docker (GHCR)
@@ -42,17 +43,38 @@ jobs:
 
       - name: 检出源码
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 检查分支提交是否关联发版标签 (防双跑自检)
+        id: check-tag
+        if: github.event_name == 'push' && github.ref_type == 'branch'
+        run: |
+          git fetch --tags --force
+          MATCHED_TAGS=$(git tag --points-at HEAD 'v*' 2>/dev/null || true)
+          if [ -n "$MATCHED_TAGS" ]; then
+            TAGS_STR=$(echo "$MATCHED_TAGS" | tr '\n' ' ' | sed 's/[[:space:]]*$//')
+            echo "检测到当前分支提交已关联语义化版本标签: [$TAGS_STR]"
+            echo "当前构建将由 Tag 流水线统一发布，自动跳过分支构建以避免重复计算与镜像竞态。"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "当前分支提交未关联发版标签，继续执行容器镜像构建。"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: 设置 QEMU 模拟器 (多架构支持)
+        if: steps.check-tag.outputs.skip != 'true'
         uses: docker/setup-qemu-action@v3
 
       - name: 设置 Docker Buildx
+        if: steps.check-tag.outputs.skip != 'true'
         uses: docker/setup-buildx-action@v3
 
       # ------------------------------------------------------------------------
       # 方式 A (默认推荐)：登录 GitHub Container Registry (ghcr.io)
       # ------------------------------------------------------------------------
       - name: 登录 GHCR
+        if: steps.check-tag.outputs.skip != 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -70,19 +92,22 @@ jobs:
 
       - name: 提取 Docker 镜像元数据 (自动计算 SemVer 标签)
         id: meta
+        if: steps.check-tag.outputs.skip != 'true'
         uses: docker/metadata-action@v5
         with:
           images: |
             ghcr.io/${{ env.REPO_LC }}
             # 如需推送到 Docker Hub，解除下方注释并将命名空间替换为实际账号：
             # ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.REPO_LC }}
+          flavor: |
+            latest=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || (startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-')) }}
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
             type=sha,format=short
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
       - name: 构建并推送多架构镜像 (amd64 / arm64)
+        if: steps.check-tag.outputs.skip != 'true'
         uses: docker/build-push-action@v6
         with:
           context: .

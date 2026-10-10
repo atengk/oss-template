@@ -22,6 +22,11 @@
 | **Python** | [`languages/python/`](./languages/python/) | [`ci.yml`](./languages/python/ci.yml): PR 门禁、pip 缓存、Ruff 代码检查、pytest 测试 | [`release.yml`](./languages/python/release.yml): 双通道发版、git-cliff 日志、sdist/wheel 与 Checksums 挂载 | [`publish.yml`](./languages/python/publish.yml): PyPI 官方包发布 (Trusted Publishing OIDC) | [`docker.yml`](./languages/python/docker.yml): 容器化应用打包与发布 (GHCR) |
 | **Rust** | [`languages/rust/`](./languages/rust/) | [`ci.yml`](./languages/rust/ci.yml): PR 门禁、rust-cache 缓存、Clippy 扫描、fmt | [`release.yml`](./languages/rust/release.yml): 双通道发版、git-cliff 日志、Release 二进制与 Checksums 挂载 | [`publish.yml`](./languages/rust/publish.yml): Crates.io 官方发布与预编译二进制附件挂载 | [`docker.yml`](./languages/rust/docker.yml): 极简多架构 Docker 镜像构建 (GHCR) |
 
+> [!TIP] **多架构容器镜像流水线 (`docker.yml`) 核心设计规范**：
+> - **双主干快照持续交付**：原生兼容 `main` 与 `master` 双主干，日常合并自动构建并推送带有 `:latest` 与 `:sha-<short>` 的多架构镜像，满足下游联调与持续交付需求；
+> - **Git 原生拓扑防双跑门禁**：无论采用单分支（Trunk-Based）还是多分支（Git Flow）模式，发版时主干更新与版本 Tag 往往同时推送到远端。分支流水线在检出后通过 `git tag --points-at HEAD 'v*'` 智能感知关联标签，自动退出后续重型步骤，由 Tag 流水线独占发布 SemVer 镜像，彻底杜绝计算浪费与 GHCR 标签并发竞争；
+> - **生产级纯净性与构建加速**：QEMU 模拟器 + Docker Buildx 交叉编译 `linux/amd64` 与 `linux/arm64` 双架构镜像；注入 `provenance: false` 与 `sbom: false`，杜绝私有镜像仓库（如 Harbor）出现 `unknown/unknown` 幽灵标签；开箱即用集成 GHA 缓存并预置 Docker Hub 双发布扩展插槽。
+
 ---
 
 ### 2. 通用生产上线部署流水线 (`deployments/`)
