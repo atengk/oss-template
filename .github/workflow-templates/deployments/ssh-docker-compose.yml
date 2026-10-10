@@ -1,0 +1,108 @@
+# ==============================================================================
+# 部署模版：云主机 / VPS 自动化部署 (SSH & Docker Compose)
+# 适用场景：单机 Linux 云服务器 (阿里云/腾讯云/AWS EC2/各类 VPS) 上的 Docker Compose 服务滚动发布
+# 触发通道：
+#   - push: 主干分支 (main, master) 提交代码自动触发
+#   - workflow_dispatch: 网页控制台手动触发 (支持指定特定 service_name 或自定义 deploy_dir)
+# 核心依赖凭据 (Secrets)：
+#   - SSH_HOST: 目标服务器公网 IP 或域名 (必填)
+#   - SSH_USERNAME: 登录用户名 (如 root 或 deployer，必填)
+#   - SSH_PRIVATE_KEY: SSH 私钥文本内容 (Ed25519 或 RSA，必填)
+#   - SSH_PORT: SSH 端口号 (可选，默认为 22)
+# 核心特性：
+#   - 使用 appleboy/ssh-action@v1 执行免密远程安全通道发布
+#   - 脚本内变量内联插值，彻底免疫远端 Linux OpenSSH AcceptEnv 环境变量白名单限制
+#   - 声明 packages: read 权限，完美支持拉取 GitHub 组织/个人私有 GHCR 镜像
+#   - 支持 docker compose pull && up -d --remove-orphans 平滑热更新
+#   - 自动执行 docker image prune -f 回收磁盘空间
+#   - 内置线上服务健康探测与冒烟测试 (Smoke Test)
+# ==============================================================================
+
+name: Deploy - SSH & Docker Compose
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      service_name:
+        description: '需重启的目标服务名称 (留空则更新全量服务)'
+        required: false
+        default: ''
+      deploy_dir:
+        description: '远端部署目录绝对路径'
+        required: false
+        default: '/opt/apps/my-project'
+
+# 并发控制：生产部署单例排队执行，严禁取消
+concurrency:
+  group: deploy-ssh-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: read # 支持拉取私有 GHCR 镜像所需的包读取权限
+
+jobs:
+  deploy-remote:
+    name: 远端主机拉取镜像并滚动更新
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://your-domain.com # 替换为实际服务对外访问域名
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@v4
+
+      - name: 执行 SSH 远端部署指令 (Docker Compose)
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script_stop: true
+          # 提示：直接在脚本内插值变量，免疫远端 Linux OpenSSH AcceptEnv 默认限制
+          script: |
+            set -e
+
+            # 1. 解析目标部署目录并进入
+            DEPLOY_DIR="${{ inputs.deploy_dir || vars.DEPLOY_DIR || '/opt/apps/my-project' }}"
+            mkdir -p "$DEPLOY_DIR"
+            cd "$DEPLOY_DIR"
+            echo "已进入远端工作目录: $DEPLOY_DIR"
+
+            # 2. 登录 GitHub Container Registry 拉取最新镜像
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # 3. 滚动拉取最新镜像
+            TARGET_SERVICE="${{ inputs.service_name }}"
+            if [ -n "$TARGET_SERVICE" ]; then
+              echo "拉取指定服务镜像: $TARGET_SERVICE"
+              docker compose pull "$TARGET_SERVICE"
+              echo "重启指定服务容器..."
+              docker compose up -d --remove-orphans "$TARGET_SERVICE"
+            else
+              echo "拉取全量最新容器镜像..."
+              docker compose pull
+              echo "重启全量服务容器..."
+              docker compose up -d --remove-orphans
+            fi
+
+            # 4. 清理虚悬镜像释放磁盘
+            docker image prune -f
+
+            # 5. 清理登出临时凭据，防止远端主机残留过期的 Actions Token 影响宿主机环境
+            docker logout ghcr.io || true
+            echo "✅ 远端 Docker Compose 服务更新已完成！"
+
+      - name: 生产环境健康检查与冒烟测试 (Smoke Test)
+        run: |
+          HEALTH_URL="${{ vars.APP_HEALTH_CHECK_URL || 'https://your-domain.com/health' }}"
+          if [[ "$HEALTH_URL" == *"your-domain.com"* ]]; then
+            echo "::warning::检测到当前健康检查地址仍为示例占位符 [$HEALTH_URL]，已跳过冒烟探测。建议在仓库中配置 Vars: APP_HEALTH_CHECK_URL 以启用自动就绪验证！"
+          else
+            echo "正在对线上服务执行健康冒烟探测: $HEALTH_URL ..."
+            curl --fail --retry 5 --retry-delay 5 --max-time 10 "$HEALTH_URL"
+            echo "✅ 线上服务健康检查通过！"
+          fi

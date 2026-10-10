@@ -1,0 +1,107 @@
+# ==============================================================================
+# 部署模版：Kubernetes 集群容器滚动发布 (kubectl)
+# 适用场景：云原生 Kubernetes 集群 (ACK/TKE/EKS/自建 K8s) 上的 Deployment 控制器发布
+# 触发通道：
+#   - push: 主干分支 (main, master) 提交代码自动触发
+#   - workflow_dispatch: 网页控制台手动触发 (支持指定 namespace, deployment_name, image_tag)
+# 核心依赖凭据 (Secrets)：
+#   - KUBECONFIG: 具有目标命名空间 Deployment 读写权限的 Kubeconfig 认证配置文本 (必填)
+# 部署模式与特性：
+#   - 模式 1 (声明式镜像更新)：当输入 image_tag 时，执行 kubectl set image 更新不可变镜像版本
+#   - 模式 2 (平滑滚动重启)：未指定 image_tag 时，执行 kubectl rollout restart 重新拉取部署
+#   - 状态就绪阻塞探测：kubectl rollout status --timeout=180s 确保 Pod 成功就绪
+#   - 生产环境线上冒烟健康探测 (Smoke Test)
+# ==============================================================================
+
+name: Deploy - Kubernetes (kubectl)
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      namespace:
+        description: '目标部署命名空间 (Namespace)'
+        required: true
+        default: 'production'
+      deployment_name:
+        description: '目标控制器名称 (Deployment Name)'
+        required: true
+        default: 'my-app'
+      image_tag:
+        description: '拟更新的目标镜像标签 (留空则默认执行平滑重启 rollout restart)'
+        required: false
+        default: ''
+      container_name:
+        description: '目标容器名称 (仅在指定 image_tag 时需要，留空则默认与 deployment_name 相同)'
+        required: false
+        default: ''
+
+# 并发控制：生产部署单例排队执行，严禁取消
+concurrency:
+  group: deploy-k8s-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-k8s:
+    name: 滚动更新 Kubernetes Deployment
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://your-domain.com # 替换为实际业务访问域名
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@v4
+
+      - name: 安装与配置 kubectl 工具链
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'latest'
+
+      - name: 初始化 Kubeconfig 上下文
+        uses: azure/k8s-set-context@v4
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBECONFIG }}
+
+      - name: 执行 Kubernetes 滚动发布与健康探测
+        env:
+          NAMESPACE: ${{ inputs.namespace || 'production' }}
+          DEPLOYMENT_NAME: ${{ inputs.deployment_name || 'my-app' }}
+          IMAGE_TAG: ${{ inputs.image_tag || '' }}
+          CONTAINER_NAME: ${{ inputs.container_name || inputs.deployment_name || 'my-app' }}
+        run: |
+          set -e
+
+          # --------------------------------------------------------------------
+          # 模式判断：
+          # 1. 若提供了 IMAGE_TAG，执行声明式不可变镜像更新 (kubectl set image)
+          # 2. 若未指定，则执行平滑滚动重启 (kubectl rollout restart)
+          # --------------------------------------------------------------------
+          if [ -n "$IMAGE_TAG" ]; then
+            REPO_LC="${GITHUB_REPOSITORY,,}"
+            TARGET_IMAGE="ghcr.io/${REPO_LC}:${IMAGE_TAG}"
+            echo "正在将 Deployment [$DEPLOYMENT_NAME] 中的容器 [$CONTAINER_NAME] 更新为新镜像: $TARGET_IMAGE ..."
+            kubectl set image deployment/$DEPLOYMENT_NAME $CONTAINER_NAME=$TARGET_IMAGE -n $NAMESPACE
+          else
+            echo "正在向集群命名空间 [$NAMESPACE] 下发 Deployment [$DEPLOYMENT_NAME] 滚动重启指令..."
+            kubectl rollout restart deployment/$DEPLOYMENT_NAME -n $NAMESPACE
+          fi
+
+          echo "等待 Pod 滚动更新完成与健康就绪探测..."
+          kubectl rollout status deployment/$DEPLOYMENT_NAME -n $NAMESPACE --timeout=180s
+          echo "✅ 集群 Deployment 滚动更新已完成且健康就绪！"
+
+      - name: 生产环境健康检查与冒烟测试 (Smoke Test)
+        run: |
+          HEALTH_URL="${{ vars.APP_HEALTH_CHECK_URL || 'https://your-domain.com/health' }}"
+          if [[ "$HEALTH_URL" == *"your-domain.com"* ]]; then
+            echo "::warning::检测到当前健康检查地址仍为示例占位符 [$HEALTH_URL]，已跳过冒烟探测。建议在仓库中配置 Vars: APP_HEALTH_CHECK_URL 以启用自动就绪验证！"
+          else
+            echo "正在对线上服务执行健康冒烟探测: $HEALTH_URL ..."
+            curl --fail --retry 5 --retry-delay 5 --max-time 10 "$HEALTH_URL"
+            echo "✅ 线上服务健康检查通过！"
+          fi

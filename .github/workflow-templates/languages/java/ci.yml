@@ -1,0 +1,81 @@
+# ==============================================================================
+# 工作流模版：Java 持续集成流水线 (Java CI - Maven)
+# 适用场景：Java / Spring Boot 模块与微服务项目的 PR 门禁与代码质量保障
+# 触发条件：
+#   - push: 主干分支 (main, master) 代码推送
+#   - pull_request: 针对主干分支的 PR 创建、编辑、代码同步
+# 核心特性：
+#   - Conventional Commits PR 标题规范静态校验
+#   - Eclipse Temurin JDK 21 官方发行版与 Maven 本地仓库依赖缓存
+#   - Maven 构建验证 (compile, test, package, verify)
+#   - 支持配合 Spotless / Checkstyle 代码格式与规范门禁插件
+# ==============================================================================
+
+name: Java CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+    types: [opened, edited, synchronize, reopened]
+
+# 并发控制：同一分支/PR 有新提交时自动取消正在执行的陈旧构建，防止竞态并节省 Runner 资源
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# 最小权限原则：仅授予代码仓库读取权限
+permissions:
+  contents: read
+
+jobs:
+  # ----------------------------------------------------------------------------
+  # Job 1: PR 标题规范校验 (仅在 PR 触发时执行)
+  # ----------------------------------------------------------------------------
+  validate-pr-title:
+    name: 校验 PR 标题规范
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      pull-requests: read
+    steps:
+      - name: 校验 PR 标题符合 Conventional Commits
+        uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            build
+            ci
+            chore
+            revert
+
+  # ----------------------------------------------------------------------------
+  # Job 2: Maven 依赖下载、编译、单元测试与构建验证
+  # ----------------------------------------------------------------------------
+  build:
+    name: 构建与测试 (Java 21 / Maven)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@v4
+
+      - name: 设置 Java 开发环境 (Temurin JDK 21)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21' # 推荐 LTS 版本；如需切换可修改为 '17' 或最新版本
+          cache: 'maven'     # 自动缓存 ~/.m2/repository 依赖，提升构建速度
+
+      - name: Maven 编译、格式校验与单元测试
+        # -B / --batch-mode 以非交互批处理模式运行，输出干净日志
+        run: mvn clean verify -B

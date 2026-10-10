@@ -1,0 +1,95 @@
+# ==============================================================================
+# 工作流模版：Node.js / 前端持续集成流水线 (Node.js CI - pnpm)
+# 适用场景：Node.js、TypeScript、Vue、React、Next.js 等前端及全栈项目的 PR 门禁
+# 触发条件：
+#   - push: 主干分支 (main, master) 代码推送
+#   - pull_request: 针对主干分支的 PR 创建、编辑、代码同步
+# 核心特性：
+#   - Conventional Commits PR 标题规范静态校验
+#   - 现代高性能包管理器 pnpm (v9+) 与 pnpm store 全局缓存
+#   - Node.js LTS (20+) 环境与跨平台依赖冻结安装 (--frozen-lockfile)
+#   - 代码风格扫描 (Lint)、TS 类型推导 (Typecheck)、单元测试 (Test) 与编译验证 (Build)
+# ==============================================================================
+
+name: Node.js CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+    types: [opened, edited, synchronize, reopened]
+
+# 并发控制：同一分支/PR 有新提交时自动取消正在执行的陈旧构建，防止竞态并节省 Runner 资源
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# 最小权限原则：仅授予代码仓库读取权限
+permissions:
+  contents: read
+
+jobs:
+  # ----------------------------------------------------------------------------
+  # Job 1: PR 标题规范校验 (仅在 PR 触发时执行)
+  # ----------------------------------------------------------------------------
+  validate-pr-title:
+    name: 校验 PR 标题规范
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      pull-requests: read
+    steps:
+      - name: 校验 PR 标题符合 Conventional Commits
+        uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            build
+            ci
+            chore
+            revert
+
+  # ----------------------------------------------------------------------------
+  # Job 2: 依赖安装、类型检查、代码规范、测试与构建验证
+  # ----------------------------------------------------------------------------
+  test:
+    name: 静态检查、测试与构建 (Node 20 / pnpm)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@v4
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9 # 推荐稳健版本；如需升级最新版可修改为 10 或具体版本号
+
+      - name: 设置 Node.js 环境
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20 # 推荐 LTS 版本；如需切换可修改为 22 或最新版本
+          cache: 'pnpm'    # 自动缓存 pnpm store，大幅加速依赖安装
+
+      - name: 冻结依赖版本安装
+        run: pnpm install --frozen-lockfile
+
+      - name: 代码风格与类型校验 (Lint & Typecheck)
+        run: |
+          pnpm run lint
+          pnpm run typecheck
+
+      - name: 运行单元测试
+        run: pnpm test
+
+      - name: 构建生产产物
+        run: pnpm run build

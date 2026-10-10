@@ -1,0 +1,89 @@
+# ==============================================================================
+# 部署模版：GitHub Pages 官方静态站点自动化发布
+# 适用场景：开源项目文档、博客、展示页 (VitePress/Docusaurus/MkDocs/mdBook/Astro) 零服务器发布
+# 触发通道：
+#   - push: 主干分支 (main, master) 提交代码自动触发
+#   - workflow_dispatch: 网页控制台手动触发
+# 核心依赖凭据：
+#   - 无需任何外部第三方 Secret！完全依赖 GitHub 内置 Actions Pages 托管机制与 GITHUB_TOKEN
+# 核心特性：
+#   - 声明 pages: write 与 id-token: write 原生安全权限
+#   - 使用 actions/upload-pages-artifact@v3 打包产物目录 (dist)
+#   - 使用 actions/deploy-pages@v4 直连 GitHub Pages CDN 发行
+#   - 部署完成后将线上页面访问地址绑定至 GitHub Environment
+#   - 内置线上服务健康探测与冒烟测试 (Smoke Test)
+# ==============================================================================
+
+name: Deploy - GitHub Pages
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+# 并发控制：GitHub Pages 部署排队单例执行，禁止取消
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: 静态站点编译与部署
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write     # 部署至 GitHub Pages 所需的核心写权限
+      id-token: write  # GitHub Pages OIDC 鉴权所需权限
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@v4
+
+      # ------------------------------------------------------------------------
+      # 静态站点构建步骤（默认为 Node.js / pnpm）
+      # 若使用 Python MkDocs、Go Hugo、Rust mdBook 或其它工具，仅需替换以下构建逻辑
+      # 并确保最终产物输出至指定目录（如 dist、public 或 site）
+      # ------------------------------------------------------------------------
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: 设置 Node.js 环境
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: 安装依赖与构建生产产物
+        run: |
+          pnpm install --frozen-lockfile || pnpm install
+          pnpm run build # 确保产物输出至 dist 或 build 目录
+
+      - name: 上传 Pages 产物
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'dist'
+
+      - name: 部署至 GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: 生产环境健康检查与冒烟测试 (Smoke Test)
+        run: |
+          DEPLOYED_URL="${{ steps.deployment.outputs.page_url }}"
+          HEALTH_URL="${{ vars.APP_HEALTH_CHECK_URL || '' }}"
+          TARGET_URL="${HEALTH_URL:-$DEPLOYED_URL}"
+
+          if [ -z "$TARGET_URL" ]; then
+            echo "::warning::未获取到 GitHub Pages 访问 URL，跳过冒烟测试。"
+          else
+            echo "正在对 GitHub Pages 访问地址执行健康冒烟探测: $TARGET_URL ..."
+            curl --fail --retry 5 --retry-delay 5 --max-time 10 "$TARGET_URL"
+            echo "✅ GitHub Pages 发布就绪，冒烟探测通过！"
+          fi

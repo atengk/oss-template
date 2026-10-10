@@ -1,0 +1,91 @@
+# ==============================================================================
+# 工作流模版：Python 持续集成流水线 (Python CI)
+# 适用场景：Python 模块、开源库、FastAPI / Django / Flask Web 应用的 PR 门禁
+# 触发条件：
+#   - push: 主干分支 (main, master) 代码推送
+#   - pull_request: 针对主干分支的 PR 创建、编辑、代码同步
+# 核心特性：
+#   - Conventional Commits PR 标题规范静态校验
+#   - 官方 actions/setup-python 环境与 pip 缓存加速
+#   - 超高速现代静态分析工具 Ruff (代码风格校验 check 与格式化校验 format)
+#   - pytest 自动化测试与代码覆盖率分析
+# ==============================================================================
+
+name: Python CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+    types: [opened, edited, synchronize, reopened]
+
+# 并发控制：同一分支/PR 有新提交时自动取消正在执行的陈旧构建，防止竞态并节省 Runner 资源
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# 最小权限原则：仅授予代码仓库读取权限
+permissions:
+  contents: read
+
+jobs:
+  # ----------------------------------------------------------------------------
+  # Job 1: PR 标题规范校验 (仅在 PR 触发时执行)
+  # ----------------------------------------------------------------------------
+  validate-pr-title:
+    name: 校验 PR 标题规范
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      pull-requests: read
+    steps:
+      - name: 校验 PR 标题符合 Conventional Commits
+        uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            build
+            ci
+            chore
+            revert
+
+  # ----------------------------------------------------------------------------
+  # Job 2: 环境安装、代码规范检查与单元测试
+  # ----------------------------------------------------------------------------
+  test:
+    name: 静态检查、格式化与测试 (Python 3.11+)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@v4
+
+      - name: 设置 Python 环境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11' # 推荐稳健主流版本；如需升级可修改为 '3.12' 或最新版本
+          cache: 'pip'           # 自动缓存 pip 下载包，加速依赖安装
+
+      - name: 安装依赖与开发工具
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff pytest pytest-cov
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f pyproject.toml ]; then pip install .; fi
+
+      - name: 代码风格与语法检查 (Ruff Linter & Formatter)
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: 运行单元测试与覆盖率统计
+        run: pytest --cov

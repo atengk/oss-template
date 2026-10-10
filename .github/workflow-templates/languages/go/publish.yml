@@ -1,0 +1,70 @@
+# ==============================================================================
+# 工作流模版：Go 生态分发与交叉编译发版 (Go Publish - GoReleaser)
+# 适用场景：Go 开源 CLI 工具、二进制守护进程的全平台交叉编译与自动化分发
+# 触发通道：
+#   - 标签推送 (push tags: v*)：与 GitHub Release 发版工作流协同触发
+#   - 网页手动触发 (workflow_dispatch)：支持指定目标版本号手动触发分发
+# 核心特性：
+#   - 依托 GoReleaser 自动编译多架构多操作系统二进制 (Linux, macOS, Windows / amd64, arm64)
+#   - 自动生成 SHA-256 校验清单并打包发布归档 (.tar.gz / .zip)
+#   - 依赖工程根目录的 .goreleaser.yaml 配置文件 (如未配置可根据官方规范初始化)
+# ==============================================================================
+
+name: Go Publish (GoReleaser)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '发布版本号 (形如 v1.0.0)'
+        required: true
+        type: string
+
+# 并发控制：包分发流水线单例排队执行，严禁取消
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  goreleaser:
+    name: 交叉编译多平台二进制与发版挂载
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # GoReleaser 上传二进制产物至 GitHub Release 所需权限
+    steps:
+      - name: 解析版本号
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG_NAME="${{ inputs.version }}"
+          else
+            TAG_NAME="${{ github.ref_name }}"
+          fi
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: 检出源码 (全量检出以供 Git 提交历史解析)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.meta.outputs.tag_name }}
+          fetch-depth: 0
+
+      - name: 设置 Go 环境
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22' # 推荐稳健版本；如需升级最新版可修改为 '1.23' 或 'stable'
+          cache: true
+
+      - name: 运行 GoReleaser 执行跨平台打包与发布
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

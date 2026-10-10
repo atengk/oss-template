@@ -175,7 +175,7 @@
 ### 方式一：GitHub 网页端一键发版 (推荐首选，零脚本零终端依赖)
 无需在本地敲任何命令或安装任何工具，随时随地在浏览器中即可一键发布新版本：
 1. 前往 GitHub 仓库页面，点击顶部 **Actions** 标签页；
-2. 在左侧选择 **Release** 流水线；
+2. 在左侧选择 **GitHub Release** 流水线；
 3. 点击右侧蓝色的 **Run workflow** 下拉按钮；
 4. 在 **发布版本号** 输入框中填入目标版本号（如 `v1.0.0`），点击绿色按钮启动即可（流水线内置严格分支防呆校验，自动拦截非默认主干分支的误触发版，且全局发版互斥保障产物原子性）。
 
@@ -202,10 +202,45 @@ GitHub Actions 将会自动执行 [`.github/workflows/release.yml`](./.github/wo
 1. 提取自上一版本以来的全部合并 PR 与提交记录；
 2. 自动生成 GitHub Release 详情并归类贡献者；
 3. 将打包产物与 `checksums.txt` 安全校验清单自动挂载至 Release 页面附件（若配置了构建步骤）；
-4. 分发至官方中心仓库或平台（若配置了 Maven / npm / PyPI / Docker / GoReleaser / Pages 等发布 Job）。
+4. **制品分发与容器镜像解耦设计**：若需自动将产物分发至官方中心仓库（Maven Central / npm / PyPI / Crates.io 等）或构建多架构 Docker 镜像推送至 GHCR，可直接选用模版库中解耦的 `publish.yml` 与 `docker.yml`。
 
 > 💡 **版本更新日志 (Changelog)**：
 > 每一个正式版本的详细变动明细、关联 Issue 与贡献者致谢均由系统自动维护，可直接前往 [GitHub Releases](https://github.com/atengk/oss-template/releases) 查看最新记录。
+
+---
+
+## 🧩 GitHub Actions 流水线模版资产库 (Workflow Templates)
+
+本项目在 [`.github/workflow-templates/`](./.github/workflow-templates/) 中沉淀了 **28 套开箱即用、自包含且经过工业级加固** 的 GitHub Actions 生产级流水线参考模版：
+
+### 1. 5 大主流语言生态全套流水线 (`languages/`)
+
+针对主流语言生态采用 **「4 文件自包含套件」** 设计，每个语言均拥有完整的独立闭环：
+
+| 语言生态 | 套件路径 | 持续集成 (CI) | GitHub 发版与产物挂载 (Release) | 生态包发布 (Publish) | 容器镜像构建 (Docker) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Java** | [languages/java/](./.github/workflow-templates/languages/java/) | Maven 构建、测试、Spotless 格式检查 | 双通道发版、git-cliff 日志、JAR 产物与 Checksums | Maven Central (Sonatype Central) 发布 | Spring Boot 多架构 Docker 镜像 (GHCR) |
+| **Node.js** | [languages/node/](./.github/workflow-templates/languages/node/) | pnpm 依赖缓存、TS 编译、ESLint、Vitest | 双通道发版、git-cliff 日志、离线 TGZ 与 Checksums | npm 官方仓库发布 (Provenance / Token) | 前端 / Node 应用多架构 Docker 镜像 (GHCR) |
+| **Go** | [languages/go/](./.github/workflow-templates/languages/go/) | Go 依赖缓存、golangci-lint、竞态测试 | 双通道发版、git-cliff 日志、二进制产物与 Checksums | GoReleaser 交叉编译全平台二进制分发 | 极简多架构 Docker 镜像 (GHCR) |
+| **Python** | [languages/python/](./.github/workflow-templates/languages/python/) | pip 缓存、Ruff 代码规范检查、pytest 测试 | 双通道发版、git-cliff 日志、sdist/wheel 与 Checksums | PyPI 官方包发布 (Trusted Publishing OIDC) | 容器化应用打包与发布 (GHCR) |
+| **Rust** | [languages/rust/](./.github/workflow-templates/languages/rust/) | rust-cache 缓存、Clippy 扫描、cargo fmt | 双通道发版、git-cliff 日志、编译产物与 Checksums | Crates.io 官方发布与预编译资产挂载 | 极简多架构 Docker 镜像 (GHCR) |
+
+### 2. 8 大通用生产上线部署流水线 (`deployments/`)
+
+解耦目标基础设施环境，覆盖自建主机、云原生容器、边缘计算及公有云静态托管：
+
+| 部署目标 | 模版文件 | 适用场景与核心机制 |
+| :--- | :--- | :--- |
+| **GitHub Pages** | [`deployments/github-pages.yml`](./.github/workflow-templates/deployments/github-pages.yml) | 静态前端 / 文档站点 (Vite/Astro/MkDocs/mdBook)，零外部依赖自动化部署 |
+| **云主机 / VPS** | [`deployments/ssh-docker-compose.yml`](./.github/workflow-templates/deployments/ssh-docker-compose.yml) | 云主机远端执行 `docker compose pull && up -d` 滚动更新，支持 GHCR 登录凭证注入 |
+| **Kubernetes 集群** | [`deployments/k8s-kubectl.yml`](./.github/workflow-templates/deployments/k8s-kubectl.yml) | 支持声明式更新 (`set image`) 与重启 (`rollout restart`) 双模式，含健康就绪状态探测 |
+| **通用 Webhook** | [`deployments/webhook.yml`](./.github/workflow-templates/deployments/webhook.yml) | 向 Portainer / Watchtower / 1Panel / 宝塔等面板推送标准 HTTP POST 回调通知 |
+| **AWS S3 & CloudFront** | [`deployments/aws-s3-cloudfront.yml`](./.github/workflow-templates/deployments/aws-s3-cloudfront.yml) | 前端产物增量同步至 S3，自动触发 CloudFront 全球边缘节点缓存刷新 (Invalidation) |
+| **Vercel** | [`deployments/vercel.yml`](./.github/workflow-templates/deployments/vercel.yml) | Next.js / Nuxt / 全栈前端，支持 PR 预览环境构建与主干生产环境 (`--prod`) 部署 |
+| **Cloudflare Pages** | [`deployments/cloudflare-pages.yml`](./.github/workflow-templates/deployments/cloudflare-pages.yml) | 利用 Wrangler CLI 将构建产物极速部署至 Cloudflare 全球边缘静态托管网络 |
+| **Cloudflare Workers** | [`deployments/cloudflare-workers.yml`](./.github/workflow-templates/deployments/cloudflare-workers.yml) | 利用 Wrangler 自动化编译并发布边缘函数 / Serverless API (Hono 等) |
+
+> 📖 **完整使用指引与配置详情**：请参阅 [工作流模版库专有文档 (.github/workflow-templates/README.md)](./.github/workflow-templates/README.md)。
 
 ---
 
@@ -218,9 +253,11 @@ GitHub Actions 将会自动执行 [`.github/workflows/release.yml`](./.github/wo
 │   │   ├── bug_report.md           # Bug 缺陷反馈模版
 │   │   ├── feature_request.md      # 新特性建议模版
 │   │   └── config.yml              # Issue 治理配置 (关闭空白 Issue & 导流 Discussions)
+│   ├── workflow-templates/         # 5 大主流语言完整套件 (CI/Release/Publish/Docker) 与 8 大生产部署流水线资产库
 │   ├── workflows/
 │   │   ├── ci.yml                  # 业务构建测试（含 PR 标题与 Shell 语法守门）
-│   │   └── release.yml             # 自动化发版、生成更新日志与分发流水线（含双通道发版与 6 大场景分发参考）
+│   │   └── release.yml             # 自动化发版、提取更新日志与 Release 资产挂载（双通道驱动，生态分发解耦至模版库）
+│   ├── CODEOWNERS                  # 代码属主与 PR 审阅者自动指派配置
 │   ├── dependabot.yml              # GitHub Actions 及多技术栈依赖月度自动巡检配置
 │   └── PULL_REQUEST_TEMPLATE.md    # Pull Request 提交模版
 ├── .githooks/

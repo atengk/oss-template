@@ -1,0 +1,96 @@
+# ==============================================================================
+# 工作流模版：Rust 多架构容器镜像构建与发布 (Rust Docker - GHCR)
+# 适用场景：Rust 生产微服务、高性能 Web 服务的多架构 (linux/amd64, linux/arm64) 容器化构建
+# 触发通道：
+#   - 主干分支推送 (push branches: main, master)：自动构建并推送带有 latest 与 short-sha 标签的镜像
+#   - 语义化标签推送 (push tags: v*)：自动解析并生成 SemVer 镜像标签 (如 v1.0.0, 1.0)
+#   - 网页手动触发 (workflow_dispatch)
+# 核心特性：
+#   - 默认发布至 GitHub 官方容器注册表 GitHub Container Registry (ghcr.io)
+#   - 开箱即用支持 Docker Hub 双源发布扩展 (取消注释即可启用)
+#   - QEMU + Docker Buildx 多架构交叉编译与 GHA 缓存加速
+#   - provenance: false & sbom: false 策略，确保产物纯净并杜绝私有镜像仓库 unknown 幽灵标签
+# ==============================================================================
+
+name: Rust Docker (GHCR)
+
+on:
+  push:
+    branches: [main, master]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# 并发控制：同一分支有新构建时自动取消旧任务；标签构建独立执行
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-push:
+    name: 构建并推送 Rust 容器镜像
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # 推送至 GHCR (ghcr.io) 所需的镜像包写入权限
+    steps:
+      - name: 转换仓库名称为全小写 (Lowercase Repository Name)
+        run: echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - name: 检出源码
+        uses: actions/checkout@v4
+
+      - name: 设置 QEMU 模拟器 (多架构支持)
+        uses: docker/setup-qemu-action@v3
+
+      - name: 设置 Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ------------------------------------------------------------------------
+      # 方式 A (默认推荐)：登录 GitHub Container Registry (ghcr.io)
+      # ------------------------------------------------------------------------
+      - name: 登录 GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ------------------------------------------------------------------------
+      # 方式 B (可选扩展)：如需同时推送至 Docker Hub，解除下方注释并配置 Secrets
+      # ------------------------------------------------------------------------
+      # - name: 登录 Docker Hub
+      #   uses: docker/login-action@v3
+      #   with:
+      #     username: ${{ secrets.DOCKERHUB_USERNAME }}
+      #     password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: 提取 Docker 镜像元数据 (自动计算 SemVer 标签)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ env.REPO_LC }}
+            # 如需推送到 Docker Hub，解除下方注释并将命名空间替换为实际账号：
+            # ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.REPO_LC }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
+            type=sha,format=short
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: 构建并推送多架构镜像 (amd64 / arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false # 避免生成 unknown 幽灵标签，提升对私有 Harbor 与老旧环境的兼容性
+          sbom: false       # 避免生成附加 attestation，保持产物纯净
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

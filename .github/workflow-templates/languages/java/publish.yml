@@ -1,0 +1,75 @@
+# ==============================================================================
+# 工作流模版：Java 构件发布至 Maven Central (Java Publish - Maven Central)
+# 适用场景：开源 Java 类库、SDK、Starter 发布至 Maven 官方中心仓库 (Sonatype Central Portal)
+# 触发通道：
+#   - 标签推送 (push tags: v*)：与 GitHub Release 发版工作流协同触发
+#   - 网页手动触发 (workflow_dispatch)：支持指定目标版本号手动触发发布
+# 核心依赖凭据 (Secrets)：
+#   - CENTRAL_USERNAME: Sonatype Central Portal 账号令牌用户名
+#   - CENTRAL_PASSWORD: Sonatype Central Portal 账号令牌密码
+#   - MAVEN_GPG_PRIVATE_KEY: ASCII-armored GPG 私钥文本 (用于产物签名)
+#   - MAVEN_GPG_PASSPHRASE: GPG 密钥保护密码
+# ==============================================================================
+
+name: Java Publish (Maven Central)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '发布版本号 (形如 v1.0.0)'
+        required: true
+        type: string
+
+# 并发控制：中心仓库发布流水线单例排队执行，严禁取消以保障版本原子性
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish-maven:
+    name: 发布构件至 Maven Central (Sonatype Portal)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: 解析版本号
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG_NAME="${{ inputs.version }}"
+          else
+            TAG_NAME="${{ github.ref_name }}"
+          fi
+          RAW_VERSION=$(echo "$TAG_NAME" | sed 's/^v//')
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "raw_version=$RAW_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: 检出源码
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.meta.outputs.tag_name }}
+
+      - name: 设置 Java 环境与 GPG
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21' # 推荐 LTS 版本；如需切换可修改为 '17' 或最新版本
+          cache: 'maven'
+          gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          gpg-passphrase: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+
+      - name: 更新 pom.xml 版本号并执行部署
+        run: |
+          mvn versions:set -DnewVersion=${{ steps.meta.outputs.raw_version }} -DgenerateBackupPoms=false
+          mvn clean deploy -DskipTests -B
+        env:
+          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}

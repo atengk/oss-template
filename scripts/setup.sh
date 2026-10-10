@@ -397,8 +397,8 @@ git config core.hooksPath .githooks
 # 根据你的具体技术栈执行构建或测试 (请在此补充业务构建命令)
 ```
 
-### 3. 配置 CI/CD 构建插槽
-打开 [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)，解除对应技术栈（Node.js / Java / Go / Python）步骤的注释即可激活自动化流水线。
+### 3. 配置 CI/CD 自动化流水线
+根据你的项目技术栈，从 [`.github/workflow-templates/`](./.github/workflow-templates/) 复制对应语言套件（Java / Node.js / Go / Python / Rust）或部署流水线至 [`.github/workflows/`](./.github/workflows/) 即可。
 EOF
 
   awk '
@@ -435,6 +435,7 @@ TARGET_FILES=(
   "scripts/release.sh"
   "scripts/setup.sh"
   ".github/ISSUE_TEMPLATE/config.yml"
+  ".github/CODEOWNERS"
 )
 
 log_info "正在替换目标工程文件占位符..."

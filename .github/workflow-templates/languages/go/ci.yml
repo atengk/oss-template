@@ -1,0 +1,90 @@
+# ==============================================================================
+# 工作流模版：Go 持续集成流水线 (Go CI)
+# 适用场景：Go 模块与微服务项目的 PR 门禁与代码质量保障
+# 触发条件：
+#   - push: 主干分支 (main, master) 代码推送
+#   - pull_request: 针对主干分支的 PR 创建、编辑、代码同步
+# 核心特性：
+#   - Conventional Commits PR 标题规范静态校验
+#   - Go 官方依赖缓存加速 (actions/setup-go)
+#   - 现代代码质量扫描 (golangci-lint)
+#   - 单元测试与数据竞态检测 (-race)
+# ==============================================================================
+
+name: Go CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+    types: [opened, edited, synchronize, reopened]
+
+# 并发控制：同一分支/PR 有新提交时自动取消正在执行的陈旧构建，防止竞态并节省 Runner 资源
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# 最小权限原则：仅授予代码仓库读取权限
+permissions:
+  contents: read
+
+jobs:
+  # ----------------------------------------------------------------------------
+  # Job 1: PR 标题规范校验 (仅在 PR 触发时执行)
+  # ----------------------------------------------------------------------------
+  validate-pr-title:
+    name: 校验 PR 标题规范
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      pull-requests: read
+    steps:
+      - name: 校验 PR 标题符合 Conventional Commits
+        uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            build
+            ci
+            chore
+            revert
+
+  # ----------------------------------------------------------------------------
+  # Job 2: 依赖下载、静态代码分析、单元测试与二进制验证
+  # ----------------------------------------------------------------------------
+  test:
+    name: 静态检查、测试与构建 (Go 1.22+)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@v4
+
+      - name: 设置 Go 开发环境
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22' # 推荐稳健版本；如需升级最新版可修改为 '1.23' 或 'stable'
+          cache: true        # 自动缓存 go.mod 下载的依赖与构建缓存
+
+      - name: 下载与校验依赖
+        run: go mod download
+
+      - name: 代码质量与规范检查 (golangci-lint)
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.59 # 如需使用最新 linter 可修改为 'latest' 或具体版本号
+
+      - name: 运行单元测试与竞态检测
+        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+
+      - name: 验证二进制可编译性
+        run: go build -v ./...

@@ -1,0 +1,80 @@
+# ==============================================================================
+# 部署模版：Cloudflare Pages 静态站点与边缘应用自动化发布 (Wrangler)
+# 适用场景：现代静态前端应用 (Vite/React/Vue/Astro/Svelte/Next 静态导出) 部署至 Cloudflare 全球边缘 CDN
+# 触发通道：
+#   - push: 主干分支 (main, master) 提交代码自动触发
+#   - workflow_dispatch: 网页控制台手动触发
+# 核心依赖凭据 (Secrets & Vars)：
+#   - CLOUDFLARE_API_TOKEN: 具有 Cloudflare Pages 编辑权限的 API 令牌 (必填 Secret)
+#   - CLOUDFLARE_ACCOUNT_ID: Cloudflare 账户 ID (必填 Secret)
+#   - CLOUDFLARE_PROJECT_NAME: Cloudflare Pages 项目名称 (可选 Var，默认 my-pages-project)
+# 核心特性：
+#   - 使用官方 cloudflare/wrangler-action@v3 执行秒级极速全球边缘同步
+#   - 产物目录默认为 dist，如需其它目录 (如 build/public) 可直接修改命令参数
+#   - 部署完成后自动回传全局访问 URL 并绑定至 GitHub Environment
+#   - 内置线上服务健康探测与冒烟测试 (Smoke Test)
+# ==============================================================================
+
+name: Deploy - Cloudflare Pages
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+# 并发控制：生产部署单例排队执行，严禁取消
+concurrency:
+  group: deploy-cloudflare-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-cloudflare:
+    name: 构建并部署至 Cloudflare Pages 全球网络
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.publish.outputs.deployment-url }}
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@v4
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: 安装依赖与构建生产产物
+        run: |
+          pnpm install --frozen-lockfile || pnpm install
+          pnpm run build # 确保产物输出至 dist 或 build 目录
+
+      - name: 发布产物至 Cloudflare Pages
+        id: publish
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=${{ vars.CLOUDFLARE_PROJECT_NAME || 'my-pages-project' }} --branch=${{ github.ref_name }}
+
+      - name: 生产环境健康检查与冒烟测试 (Smoke Test)
+        run: |
+          DEPLOYED_URL="${{ steps.publish.outputs.deployment-url }}"
+          HEALTH_URL="${{ vars.APP_HEALTH_CHECK_URL || '' }}"
+          TARGET_URL="${HEALTH_URL:-$DEPLOYED_URL}"
+
+          if [ -z "$TARGET_URL" ] || [[ "$TARGET_URL" == *"your-domain.com"* ]]; then
+            echo "::warning::未检测到有效探测地址，跳过冒烟测试。"
+          else
+            echo "正在对 Cloudflare Pages 地址执行健康冒烟探测: $TARGET_URL ..."
+            curl --fail --retry 5 --retry-delay 5 --max-time 10 "$TARGET_URL"
+            echo "✅ 边缘节点发布就绪，冒烟探测通过！"
+          fi

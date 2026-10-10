@@ -1,0 +1,95 @@
+# ==============================================================================
+# 工作流模版：Node.js 生态包发布至 npm (Node.js Publish - npm)
+# 适用场景：开源 npm 包、SDK、CLI 工具发布至 npm 官方注册表 (npmjs.com)
+# 触发通道：
+#   - 标签推送 (push tags: v*)：与 GitHub Release 发版工作流协同触发
+#   - 网页手动触发 (workflow_dispatch)：支持指定目标版本号手动触发发布
+# 认证支持：
+#   - 方式 A (传统)：在仓库配置 NPM_TOKEN (静态 Automation Token)
+#   - 方式 B (现代推荐)：npm Trusted Publishing (基于 OIDC，设置 permissions.id-token: write)
+# 分流发布机制：
+#   - 正式版本 (如 v1.0.0)：发布至 npm 默认通道 (tag: latest)
+#   - 预发布版本 (如 v1.0.0-rc.1)：自动发布至预发通道 (tag: next)，防止污染正式用户
+# ==============================================================================
+
+name: Node.js Publish (npm)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '发布版本号 (形如 v1.0.0)'
+        required: true
+        type: string
+
+# 并发控制：包分发流水线单例排队执行，严禁取消
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish-npm:
+    name: 发布包至 npm 官方仓库
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # 现代 npm Trusted Publishing (OIDC) 免密钥鉴权所需权限
+    steps:
+      - name: 解析版本号
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG_NAME="${{ inputs.version }}"
+          else
+            TAG_NAME="${{ github.ref_name }}"
+          fi
+          RAW_VERSION=$(echo "$TAG_NAME" | sed 's/^v//')
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "raw_version=$RAW_VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$TAG_NAME" =~ - ]]; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 检出源码
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.meta.outputs.tag_name }}
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9 # 推荐稳健版本；如需升级最新版可修改为 10 或具体版本号
+
+      - name: 设置 Node.js 环境
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20 # 推荐 LTS 版本；如需切换可修改为 22 或最新版本
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+
+      - name: 安装依赖与编译打包
+        run: |
+          pnpm install --frozen-lockfile
+          # 同步 package.json 版本号为当前发版版本
+          npm version ${{ steps.meta.outputs.raw_version }} --no-git-tag-version --allow-same-version
+          pnpm run build
+
+      - name: 发布至 npm (根据是否预发布自动分流 @next 或 @latest 防污染)
+        run: |
+          if [ "${{ steps.meta.outputs.is_prerelease }}" = "true" ]; then
+            echo "发布预发布版本至 npm (tag: next)..."
+            pnpm publish --no-git-checks --tag next --access public
+          else
+            echo "发布正式版本至 npm (tag: latest)..."
+            pnpm publish --no-git-checks --access public
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,0 +1,109 @@
+# ==============================================================================
+# 工作流模版：Rust 发行包发布至 Crates.io (Rust Publish - Crates.io)
+# 适用场景：开源 Rust 类库、CLI 工具发布至 Crates 官方源 (crates.io)，并支持跨平台编译二进制挂载
+# 触发通道：
+#   - 标签推送 (push tags: v*)：与 GitHub Release 发版工作流协同触发
+#   - 网页手动触发 (workflow_dispatch)：支持指定目标版本号手动触发发布
+# 核心依赖凭据 (Secrets)：
+#   - CARGO_REGISTRY_TOKEN: 在 crates.io 账户中创建的 API 密钥 (用于 cargo publish)
+# 核心特性：
+#   - 官方源自动发布 (cargo publish)
+#   - 可选矩阵多架构交叉编译 (Linux x86_64, macOS x86_64, macOS aarch64, Windows x86_64)
+#   - 依托 taiki-e/upload-rust-binary-action 将跨平台编译完成的可执行二进制自动挂载至 GitHub Release 附件
+# ==============================================================================
+
+name: Rust Publish (Crates.io)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '发布版本号 (形如 v1.0.0)'
+        required: true
+        type: string
+
+# 并发控制：包分发流水线单例排队执行，严禁取消
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # ----------------------------------------------------------------------------
+  # Job 1: 发布类库至 Crates.io 官方索引库
+  # ----------------------------------------------------------------------------
+  publish-crates:
+    name: 发布 Crates 至 Crates.io 官方源
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tag_name: ${{ steps.meta.outputs.tag_name }}
+    steps:
+      - name: 解析版本号
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG_NAME="${{ inputs.version }}"
+          else
+            TAG_NAME="${{ github.ref_name }}"
+          fi
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: 检出源码
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.meta.outputs.tag_name }}
+
+      - name: 安装 Rust 工具链
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: 发布至 Crates.io
+        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  # ----------------------------------------------------------------------------
+  # Job 2 (可选扩展)：如需为 CLI 工具交叉编译多平台二进制并挂载至 GitHub Release，
+  # 请解除下方注释，并将 'my-cli' 替换为 Cargo.toml 中实际的 [[bin]] 名称：
+  # ----------------------------------------------------------------------------
+  # upload-release-assets:
+  #   name: 交叉编译二进制产物并挂载至 GitHub Release
+  #   needs: publish-crates
+  #   runs-on: ${{ matrix.os }}
+  #   permissions:
+  #     contents: write
+  #   strategy:
+  #     matrix:
+  #       include:
+  #         - target: x86_64-unknown-linux-gnu
+  #           os: ubuntu-latest
+  #         - target: x86_64-apple-darwin
+  #           os: macos-latest
+  #         - target: aarch64-apple-darwin
+  #           os: macos-latest
+  #         - target: x86_64-pc-windows-msvc
+  #           os: windows-latest
+  #   steps:
+  #     - name: 检出源码
+  #       uses: actions/checkout@v4
+  #       with:
+  #         ref: ${{ needs.publish-crates.outputs.tag_name }}
+  #
+  #     - name: 安装 Rust 工具链
+  #       uses: dtolnay/rust-toolchain@master
+  #       with:
+  #         toolchain: stable
+  #         targets: ${{ matrix.target }}
+  #
+  #     - name: 编译二进制产物并上传 Release 附件
+  #       uses: taiki-e/upload-rust-binary-action@v1
+  #       with:
+  #         bin: my-cli # 替换为 Cargo.toml 中的真实二进制名称
+  #         target: ${{ matrix.target }}
+  #         token: ${{ secrets.GITHUB_TOKEN }}

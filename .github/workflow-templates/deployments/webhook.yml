@@ -1,0 +1,109 @@
+# ==============================================================================
+# 部署模版：通用 Webhook 回调自动化部署 (Webhook)
+# 适用场景：Portainer Webhook、Watchtower、Coolify、Dokku、1Panel、宝塔或自建 CI/CD 运维面板
+# 触发通道：
+#   - push: 主干分支 (main, master) 提交代码自动触发
+#   - workflow_dispatch: 网页控制台手动触发 (支持传入指定服务与环境参数)
+# 核心依赖凭据 (Secrets)：
+#   - WEBHOOK_URL: 目标运维平台接收部署通知的 HTTP/HTTPS Webhook 地址 (必填)
+#   - WEBHOOK_TOKEN: 用于 Bearer 认证的请求令牌 (可选)
+# 核心特性：
+#   - 构造结构化 JSON Payload (含仓库、分支、Commit SHA、触发者、环境与服务名称)
+#   - 支持 HTTP POST 请求自动重试 (3 次重试，超时保护 30 秒)
+#   - 内置线上服务健康探测与冒烟测试 (Smoke Test)
+# ==============================================================================
+
+name: Deploy - Webhook
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      service:
+        description: '拟触发更新的服务名称 (可选)'
+        required: false
+        default: ''
+      environment:
+        description: '目标部署环境标识 (默认 production)'
+        required: false
+        default: 'production'
+
+# 并发控制：生产部署单例排队执行，严禁取消
+concurrency:
+  group: deploy-webhook-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-webhook:
+    name: 触发 Webhook 自动化部署
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://your-domain.com # 替换为实际服务对外访问地址
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@v4
+
+      # ------------------------------------------------------------------------
+      # 通用 Webhook 部署触发器
+      # 适用平台：Portainer Webhook、Watchtower、Coolify、Dokku、宝塔 Webhook、自建发布平台
+      # 所需配置：在仓库 Settings -> Secrets 中配置 WEBHOOK_URL (必填) 与 WEBHOOK_TOKEN (可选)
+      # ------------------------------------------------------------------------
+      - name: 下发 Webhook 触发指令
+        run: |
+          set -e
+
+          WEBHOOK_URL="${{ secrets.WEBHOOK_URL }}"
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "::error::未配置 secrets.WEBHOOK_URL，无法触发部署！请在仓库 Secrets 中配置目标 Webhook 地址。"
+            exit 1
+          fi
+
+          echo "正在向目标 Webhook 发送部署通知..."
+
+          # 构建标准部署 Payload
+          PAYLOAD=$(cat <<EOF
+          {
+            "repository": "${{ github.repository }}",
+            "ref": "${{ github.ref_name }}",
+            "commit": "${{ github.sha }}",
+            "actor": "${{ github.actor }}",
+            "event": "${{ github.event_name }}",
+            "environment": "${{ inputs.environment || 'production' }}",
+            "service": "${{ inputs.service || '' }}"
+          }
+          EOF
+          )
+
+          AUTH_HEADER=""
+          if [ -n "${{ secrets.WEBHOOK_TOKEN }}" ]; then
+            AUTH_HEADER="Authorization: Bearer ${{ secrets.WEBHOOK_TOKEN }}"
+          fi
+
+          # 发送 HTTP POST 请求，支持 3 次重试
+          curl --fail \
+            --retry 3 \
+            --retry-delay 3 \
+            --max-time 30 \
+            -X POST \
+            -H "Content-Type: application/json" \
+            ${AUTH_HEADER:+-H "$AUTH_HEADER"} \
+            -d "$PAYLOAD" \
+            "$WEBHOOK_URL"
+
+          echo "✅ Webhook 部署触发指令已成功下发！"
+
+      - name: 生产环境健康检查与冒烟测试 (Smoke Test)
+        run: |
+          HEALTH_URL="${{ vars.APP_HEALTH_CHECK_URL || 'https://your-domain.com/health' }}"
+          if [[ "$HEALTH_URL" == *"your-domain.com"* ]]; then
+            echo "::warning::检测到当前健康检查地址仍为示例占位符 [$HEALTH_URL]，已跳过冒烟探测。建议在仓库中配置 Vars: APP_HEALTH_CHECK_URL 以启用自动就绪验证！"
+          else
+            echo "正在对线上服务执行健康冒烟探测: $HEALTH_URL ..."
+            curl --fail --retry 5 --retry-delay 5 --max-time 10 "$HEALTH_URL"
+            echo "✅ 线上服务健康检查通过！"
+          fi

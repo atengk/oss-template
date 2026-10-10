@@ -1,0 +1,89 @@
+# ==============================================================================
+# 工作流模版：Rust 持续集成流水线 (Rust CI)
+# 适用场景：Rust 库、CLI 工具与系统服务的 PR 门禁与代码质量保障
+# 触发条件：
+#   - push: 主干分支 (main, master) 代码推送
+#   - pull_request: 针对主干分支的 PR 创建、编辑、代码同步
+# 核心特性：
+#   - Conventional Commits PR 标题规范静态校验
+#   - 极速稳定 Rust 官方工具链安装 (dtolnay/rust-toolchain@master)
+#   - 智能 Cargo 依赖与构建中间产物缓存 (swatinem/rust-cache@v2)
+#   - 官方代码格式化扫描 (cargo fmt --check) 与严格 Clippy 静态检查 (-D warnings)
+#   - 全特性全目标单元测试与集成测试 (cargo test --all-targets --all-features)
+# ==============================================================================
+
+name: Rust CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+    types: [opened, edited, synchronize, reopened]
+
+# 并发控制：同一分支/PR 有新提交时自动取消正在执行的陈旧构建，防止竞态并节省 Runner 资源
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# 最小权限原则：仅授予代码仓库读取权限
+permissions:
+  contents: read
+
+jobs:
+  # ----------------------------------------------------------------------------
+  # Job 1: PR 标题规范校验 (仅在 PR 触发时执行)
+  # ----------------------------------------------------------------------------
+  validate-pr-title:
+    name: 校验 PR 标题规范
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      pull-requests: read
+    steps:
+      - name: 校验 PR 标题符合 Conventional Commits
+        uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            build
+            ci
+            chore
+            revert
+
+  # ----------------------------------------------------------------------------
+  # Job 2: 工具链安装、格式化检查、Clippy 分析与测试
+  # ----------------------------------------------------------------------------
+  test:
+    name: 格式化、Clippy 检查与测试 (Rust Stable)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@v4
+
+      - name: 安装 Rust 工具链
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable # 推荐最新稳定版本；如需特定版本可指定具体版本号 (如 1.80.0)
+          components: clippy, rustfmt
+
+      - name: 智能依赖与编译缓存 (rust-cache)
+        uses: swatinem/rust-cache@v2
+
+      - name: 代码格式化检查 (rustfmt)
+        run: cargo fmt --check
+
+      - name: 静态代码分析与警告检查 (Clippy)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: 运行单元测试与集成测试
+        run: cargo test --all-targets --all-features

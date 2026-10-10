@@ -123,7 +123,7 @@ bash scripts/commit.sh -t feat -s api -m "重构对外接口协议" -b -p -y
 
 若维护者未在本地配置终端发版环境，可直接在 GitHub 网页端一键触发：
 1. 前往 GitHub 仓库页面，点击顶部 **Actions** 标签页；
-2. 在左侧选择 **Release** 流水线；
+2. 在左侧选择 **GitHub Release** 流水线；
 3. 点击右侧蓝色的 **Run workflow** 下拉按钮；
 4. 在 **发布版本号** 输入框中填入目标版本号（如 `v1.2.0`）；
 5. 点击绿色 **Run workflow** 按钮启动流水线。
@@ -178,7 +178,7 @@ bash scripts/release.sh v1.0.0 -y
 - 自动提取自上一版本以来的全部提交与 PR，由 `git-cliff` 关联 PR 链接与新贡献者致谢，格式化为发布日志；
 - 自动创建 GitHub Release 并挂载发布内容；
 - 将打包产物与 `checksums.txt` 挂载至附件（若配置了构建步骤）；
-- 分发至官方中心仓库或平台（若配置了对应发布 Job）。
+- **生态分发与镜像解耦**：若需自动分发至 Maven Central / npm / PyPI / Crates.io 等包仓库或构建多架构 Docker 镜像，可直接选用模版库 [`.github/workflow-templates/`](./.github/workflow-templates/) 中对应的 `publish.yml` 与 `docker.yml` 独立流水线。
 
 > 💡 **安全校验和 (SHA-256 Checksums) 验证指引**：
 > 下游用户或测试者下载产物与 `checksums.txt` 后，可在终端通过原生命令一键验证文件完整性：
