@@ -30,14 +30,14 @@
 
 | 部署目标 | 模版文件 | 适用场景 | 核心机制 |
 | :--- | :--- | :--- | :--- |
-| **GitHub Pages** | [`deployments/github-pages.yml`](./deployments/github-pages.yml) | 静态前端 / 文档站点 (Vite/Astro/MkDocs/mdBook) | 编译静态产物并上传部署至 GitHub 官方 Pages 服务（零外部依赖） |
-| **云主机 / VPS** | [`deployments/ssh-docker-compose.yml`](./deployments/ssh-docker-compose.yml) | 单机 / 中小微服务 / 自建节点 | SSH 远端执行 `docker compose pull && up -d` 滚动更新，免 sshd AcceptEnv 限制 |
-| **Kubernetes 集群** | [`deployments/k8s-kubectl.yml`](./deployments/k8s-kubectl.yml) | 企业级云原生容器集群 | 支持声明式 `set image` 与重启 `rollout restart` 双模式，含健康就绪探测 |
-| **通用 Webhook** | [`deployments/webhook.yml`](./deployments/webhook.yml) | Portainer / Watchtower / 宝塔 / 自建面板 | 发送标准 HTTP POST Webhook 回调通知目标运维平台拉取镜像并部署 |
-| **AWS S3 & CloudFront** | [`deployments/aws-s3-cloudfront.yml`](./deployments/aws-s3-cloudfront.yml) | 企业级前端 / 静态网站 / 全球 CDN | 产物增量同步至 S3 存储桶，自动触发 CloudFront 全节点缓存失效刷新 |
-| **Vercel** | [`deployments/vercel.yml`](./deployments/vercel.yml) | Next.js / Nuxt / 全栈前端 | 预览环境 (Preview) 自动部署 + 主干生产环境 (`--prod`) 极速分发 |
-| **Cloudflare Pages** | [`deployments/cloudflare-pages.yml`](./deployments/cloudflare-pages.yml) | 现代化前端静态 / 边缘应用 | 利用 Wrangler 将构建产物部署至 Cloudflare 全球边缘网络 |
-| **Cloudflare Workers** | [`deployments/cloudflare-workers.yml`](./deployments/cloudflare-workers.yml) | 边缘 Serverless API / 轻量服务端 (Hono 等) | 利用 Wrangler 自动化编译并发布边缘函数至 Cloudflare 全球网络 |
+| **GitHub Pages** | [`deployments/deploy-github-pages.yml`](./deployments/deploy-github-pages.yml) | 静态前端 / 文档站点 (Vite/Astro/MkDocs/mdBook) | 编译静态产物并上传部署至 GitHub 官方 Pages 服务（零外部依赖） |
+| **云主机 / VPS** | [`deployments/deploy-ssh-docker-compose.yml`](./deployments/deploy-ssh-docker-compose.yml) | 单机 / 中小微服务 / 自建节点 | SSH 远端执行 `docker compose pull && up -d` 滚动更新，免 sshd AcceptEnv 限制 |
+| **Kubernetes 集群** | [`deployments/deploy-k8s-kubectl.yml`](./deployments/deploy-k8s-kubectl.yml) | 企业级云原生容器集群 | 支持声明式 `set image` 与重启 `rollout restart` 双模式，含健康就绪探测 |
+| **通用 Webhook** | [`deployments/deploy-webhook.yml`](./deployments/deploy-webhook.yml) | Portainer / Watchtower / 宝塔 / 自建面板 | 发送标准 HTTP POST Webhook 回调通知目标运维平台拉取镜像并部署 |
+| **AWS S3 & CloudFront** | [`deployments/deploy-aws-s3-cloudfront.yml`](./deployments/deploy-aws-s3-cloudfront.yml) | 企业级前端 / 静态网站 / 全球 CDN | 产物增量同步至 S3 存储桶，自动触发 CloudFront 全节点缓存失效刷新 |
+| **Vercel** | [`deployments/deploy-vercel.yml`](./deployments/deploy-vercel.yml) | Next.js / Nuxt / 全栈前端 | 预览环境 (Preview) 自动部署 + 主干生产环境 (`--prod`) 极速分发 |
+| **Cloudflare Pages** | [`deployments/deploy-cloudflare-pages.yml`](./deployments/deploy-cloudflare-pages.yml) | 现代化前端静态 / 边缘应用 | 利用 Wrangler 将构建产物部署至 Cloudflare 全球边缘网络 |
+| **Cloudflare Workers** | [`deployments/deploy-cloudflare-workers.yml`](./deployments/deploy-cloudflare-workers.yml) | 边缘 Serverless API / 轻量服务端 (Hono 等) | 利用 Wrangler 自动化编译并发布边缘函数至 Cloudflare 全球网络 |
 
 ---
 
@@ -54,7 +54,7 @@ cp .github/workflow-templates/languages/java/publish.yml .github/workflows/publi
 cp .github/workflow-templates/languages/java/docker.yml .github/workflows/docker.yml
 
 # 2. 拷贝生产部署流水线
-cp .github/workflow-templates/deployments/ssh-docker-compose.yml .github/workflows/deploy-prod.yml
+cp .github/workflow-templates/deployments/deploy-ssh-docker-compose.yml .github/workflows/deploy-prod.yml
 ```
 
 ### 示例 2：全栈前端应用 / 文档站点（Node.js CI + GitHub Pages 部署）
@@ -64,7 +64,7 @@ cp .github/workflow-templates/languages/node/ci.yml .github/workflows/ci.yml
 cp .github/workflow-templates/languages/node/release.yml .github/workflows/release.yml
 
 # 2. 拷贝静态页面部署流水线
-cp .github/workflow-templates/deployments/github-pages.yml .github/workflows/deploy-pages.yml
+cp .github/workflow-templates/deployments/deploy-github-pages.yml .github/workflows/deploy-pages.yml
 ```
 
 ### 示例 3：开源 SDK / 库发布（以 Python / npm 发布为例）

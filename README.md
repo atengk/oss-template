@@ -231,14 +231,14 @@ GitHub Actions 将会自动执行 [`.github/workflows/release.yml`](./.github/wo
 
 | 部署目标 | 模版文件 | 适用场景与核心机制 |
 | :--- | :--- | :--- |
-| **GitHub Pages** | [`deployments/github-pages.yml`](./.github/workflow-templates/deployments/github-pages.yml) | 静态前端 / 文档站点 (Vite/Astro/MkDocs/mdBook)，零外部依赖自动化部署 |
-| **云主机 / VPS** | [`deployments/ssh-docker-compose.yml`](./.github/workflow-templates/deployments/ssh-docker-compose.yml) | 云主机远端执行 `docker compose pull && up -d` 滚动更新，支持 GHCR 登录凭证注入 |
-| **Kubernetes 集群** | [`deployments/k8s-kubectl.yml`](./.github/workflow-templates/deployments/k8s-kubectl.yml) | 支持声明式更新 (`set image`) 与重启 (`rollout restart`) 双模式，含健康就绪状态探测 |
-| **通用 Webhook** | [`deployments/webhook.yml`](./.github/workflow-templates/deployments/webhook.yml) | 向 Portainer / Watchtower / 1Panel / 宝塔等面板推送标准 HTTP POST 回调通知 |
-| **AWS S3 & CloudFront** | [`deployments/aws-s3-cloudfront.yml`](./.github/workflow-templates/deployments/aws-s3-cloudfront.yml) | 前端产物增量同步至 S3，自动触发 CloudFront 全球边缘节点缓存刷新 (Invalidation) |
-| **Vercel** | [`deployments/vercel.yml`](./.github/workflow-templates/deployments/vercel.yml) | Next.js / Nuxt / 全栈前端，支持 PR 预览环境构建与主干生产环境 (`--prod`) 部署 |
-| **Cloudflare Pages** | [`deployments/cloudflare-pages.yml`](./.github/workflow-templates/deployments/cloudflare-pages.yml) | 利用 Wrangler CLI 将构建产物极速部署至 Cloudflare 全球边缘静态托管网络 |
-| **Cloudflare Workers** | [`deployments/cloudflare-workers.yml`](./.github/workflow-templates/deployments/cloudflare-workers.yml) | 利用 Wrangler 自动化编译并发布边缘函数 / Serverless API (Hono 等) |
+| **GitHub Pages** | [`deployments/deploy-github-pages.yml`](./.github/workflow-templates/deployments/deploy-github-pages.yml) | 静态前端 / 文档站点 (Vite/Astro/MkDocs/mdBook)，零外部依赖自动化部署 |
+| **云主机 / VPS** | [`deployments/deploy-ssh-docker-compose.yml`](./.github/workflow-templates/deployments/deploy-ssh-docker-compose.yml) | 云主机远端执行 `docker compose pull && up -d` 滚动更新，支持 GHCR 登录凭证注入 |
+| **Kubernetes 集群** | [`deployments/deploy-k8s-kubectl.yml`](./.github/workflow-templates/deployments/deploy-k8s-kubectl.yml) | 支持声明式更新 (`set image`) 与重启 (`rollout restart`) 双模式，含健康就绪状态探测 |
+| **通用 Webhook** | [`deployments/deploy-webhook.yml`](./.github/workflow-templates/deployments/deploy-webhook.yml) | 向 Portainer / Watchtower / 1Panel / 宝塔等面板推送标准 HTTP POST 回调通知 |
+| **AWS S3 & CloudFront** | [`deployments/deploy-aws-s3-cloudfront.yml`](./.github/workflow-templates/deployments/deploy-aws-s3-cloudfront.yml) | 前端产物增量同步至 S3，自动触发 CloudFront 全球边缘节点缓存刷新 (Invalidation) |
+| **Vercel** | [`deployments/deploy-vercel.yml`](./.github/workflow-templates/deployments/deploy-vercel.yml) | Next.js / Nuxt / 全栈前端，支持 PR 预览环境构建与主干生产环境 (`--prod`) 部署 |
+| **Cloudflare Pages** | [`deployments/deploy-cloudflare-pages.yml`](./.github/workflow-templates/deployments/deploy-cloudflare-pages.yml) | 利用 Wrangler CLI 将构建产物极速部署至 Cloudflare 全球边缘静态托管网络 |
+| **Cloudflare Workers** | [`deployments/deploy-cloudflare-workers.yml`](./.github/workflow-templates/deployments/deploy-cloudflare-workers.yml) | 利用 Wrangler 自动化编译并发布边缘函数 / Serverless API (Hono 等) |
 
 > 📖 **完整使用指引与配置详情**：请参阅 [工作流模版库专有文档 (.github/workflow-templates/README.md)](./.github/workflow-templates/README.md)。
 
