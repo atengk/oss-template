@@ -109,7 +109,7 @@ jobs:
           fi
 
       - name: 设置 Python 环境
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11' # 推荐稳健主流版本；如需升级可修改为 '3.12' 或最新版本
           cache: 'pip'
