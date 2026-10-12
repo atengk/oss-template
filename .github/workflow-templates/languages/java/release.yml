@@ -99,7 +99,7 @@ jobs:
             fi
           fi
 
-          RAW_VERSION=$(echo "$TAG_NAME" | sed 's/^v//')
+          RAW_VERSION="${TAG_NAME#v}"
           echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
           echo "raw_version=$RAW_VERSION" >> "$GITHUB_OUTPUT"
           if [[ "$TAG_NAME" =~ - ]]; then
