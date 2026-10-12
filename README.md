@@ -71,7 +71,8 @@
   > 1. 全局精准替换上述元数据（包括 README.md、CODE_OF_CONDUCT.md、CONTRIBUTING.md、SECURITY.md、LICENSE、.github/ISSUE_TEMPLATE/config.yml 等）；
   > 2. 配置本地 Git 规范提交钩子：执行 git config core.hooksPath .githooks；
   > 3. 运行 bash scripts/setup.sh --clean -y 自动完成模版教学章节裁剪、清理 setup.sh 并创建初始提交（若偏好纯原生零脚本模式，可使用 --clean-all 一键彻底删除 scripts/ 目录）；
-  > 4. 【可选极简选项】：如果我不打算使用 scripts/ 目录下的辅助脚本，请同时将 scripts/ 目录完整物理删除（本项目完全支持纯原生 Git 与 GitHub Web 网页端零脚本开发）。
+  > 4. 【技术栈流水线对齐】：如果已确定技术栈（如 Python/Go/Java/Node/Rust），请从 .github/workflow-templates/languages/<lang>/ 复制对应的 ci.yml 与 release.yml 覆盖至 .github/workflows/，以启用专属单测与 Release 制品自动打包挂载；
+  > 5. 【可选极简选项】：如果我不打算使用 scripts/ 目录下的辅助脚本，请同时将 scripts/ 目录完整物理删除（本项目完全支持纯原生 Git 与 GitHub Web 网页端零脚本开发）。
   > ```
 
 - **🛠️ 方式 B：使用内置向导脚本 (scripts/setup.sh)**
@@ -116,7 +117,7 @@
 > 3. 引入自动化发版体系：
 >    - 引入 .cliff.toml（适配 v?[0-9].* 标签正则）与 scripts/release.sh；
 >    - 在 scripts/release.sh 的 custom_bump_version 中按需解除本技术栈的版本号更新命令；
->    - 引入 .github/workflows/release.yml 双通道发版流水线；
+>    - 引入 .github/workflows/release.yml 双通道发版流水线（若需随 Release 自动打包挂载语言制品，可直接从 .github/workflow-templates/languages/<lang>/release.yml 引入）；
 > 4. 社区治理与配置增量安全合并：
 >    - 引入 CODE_OF_CONDUCT.md、CONTRIBUTING.md、SECURITY.md 与 Issue/PR 模板；
 >    - 安全合并 .editorconfig、.gitattributes 与 .gitignore（仅增量追加规则，保留原有配置）；
@@ -128,7 +129,7 @@
 
 #### 🛠️ 方式 B：手动增量复制引入
 若偏好手动接入，只需将本模版的以下构件按需复制到你的项目中：
-1. **发版与日志**：复制 `.cliff.toml`、`scripts/release.sh` 与 `.github/workflows/release.yml`；
+1. **发版与日志**：复制 `.cliff.toml`、`scripts/release.sh` 与 `.github/workflows/release.yml`（若需随 Release 自动编译挂载语言制品，可直接选用对应语言专属的 `release.yml`）；
 2. **规范提交**：复制 `.githooks/commit-msg` 并执行 `git config core.hooksPath .githooks`（或直接使用 GitHub Squash Merge 软着陆）；
 3. **治理文档**：复制 `CODE_OF_CONDUCT.md`、`CONTRIBUTING.md`、`SECURITY.md` 并将其中占位符更新为你自己的项目信息；
 4. **工程底座配置**：按需复制或增量合并 `.editorconfig`、`.gitattributes`、`.gitignore`、`.dockerignore` 与 `.github/dependabot.yml`。
@@ -203,6 +204,14 @@ GitHub Actions 将会自动执行 [`.github/workflows/release.yml`](./.github/wo
 2. 自动生成 GitHub Release 详情并归类贡献者；
 3. 将打包产物与 `checksums.txt` 安全校验清单自动挂载至 Release 页面附件（若配置了构建步骤）；
 4. **制品分发与容器镜像解耦设计**：若需自动将产物分发至官方中心仓库（Maven Central / npm / PyPI / Crates.io 等）或构建多架构 Docker 镜像推送至 GHCR，可直接选用模版库中解耦的 `publish.yml` 与 `docker.yml`。
+
+> [!IMPORTANT] **通用 Release 底座 vs. 语言专属制品打包 Release**：
+> - **根目录底座 (`.github/workflows/release.yml`)**：提供纯净通用的发版底座（基于 git-cliff 提取更新日志、创建 GitHub Release 并支持网页端参数化发版），默认**不包含**具体语言的编译打包任务；
+> - **语言专属发版 (`.github/workflow-templates/languages/<lang>/release.yml`)**：内置了对应语言完整的发行制品编译与自动挂载逻辑（例如 Python 的 sdist/wheel、Java 的 JAR、Go/Rust 的预编译二进制、Node 的 TGZ 以及全套 SHA256 `checksums.txt`）；
+> - **覆盖指引**：若你的项目需要随 GitHub Release 自动打包并挂载语言制品附件，请在初始化后直接将对应语言模版**覆盖复制**至工作流目录：
+>   ```bash
+>   cp .github/workflow-templates/languages/<language>/release.yml .github/workflows/release.yml
+>   ```
 
 > 💡 **版本更新日志 (Changelog)**：
 > 每一个正式版本的详细变动明细、关联 Issue 与贡献者致谢均由系统自动维护，可直接前往 [GitHub Releases](https://github.com/atengk/oss-template/releases) 查看最新记录。

@@ -50,6 +50,10 @@
 
 当你在具体项目中需要启用流水线时，只需将对应模版拷贝至 `.github/workflows/`：
 
+> [!NOTE] **关于覆盖根目录已有工作流**：
+> 根目录 `.github/workflows/` 下默认提供了通用轻量底座（如通用 ShellCheck 门禁与通用 git-cliff 发版底座）。
+> 若要启用各语言专属的深度能力（如单测执行、发行包编译与 Release 产物附件自动挂载），直接将语言专属模版（`ci.yml`、`release.yml` 等）**覆盖复制**至 `.github/workflows/` 即可。
+
 ### 示例 1：开箱即用后端微服务（Java 完整四件套 + VPS 部署）
 ```bash
 # 1. 拷贝 Java 专属完整套件 (CI、GitHub Release、Maven Central 发布、Docker 构建)

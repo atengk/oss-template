@@ -398,7 +398,7 @@ git config core.hooksPath .githooks
 ```
 
 ### 3. 配置 CI/CD 自动化流水线
-根据你的项目技术栈，从 [`.github/workflow-templates/`](./.github/workflow-templates/) 复制对应语言套件（Java / Node.js / Go / Python / Rust）或部署流水线至 [`.github/workflows/`](./.github/workflows/) 即可。
+根据你的项目技术栈，从 [`.github/workflow-templates/`](./.github/workflow-templates/) 复制对应语言专属套件（如 `ci.yml`、覆盖 `release.yml` 以启用制品自动打包挂载）至 [`.github/workflows/`](./.github/workflows/) 即可。
 EOF
 
   awk '
@@ -536,12 +536,14 @@ if [ "$CLEAN_AFTER_SETUP" = true ]; then
   fi
   printf "\n仓库现已整洁就绪。推荐后续操作:\n"
   printf "  1. 打开 %bREADME.md%b 补充完善你的业务功能介绍与安装步骤；\n" "${COLOR_CYAN}" "${COLOR_RESET}"
-  printf "  2. 打开 %b.github/workflows/ci.yml%b 配置你的业务构建与测试步骤；\n" "${COLOR_CYAN}" "${COLOR_RESET}"
-  printf "  3. 运行 %bgit push origin main%b 推送你的新项目。\n\n" "${COLOR_CYAN}" "${COLOR_RESET}"
+  printf "  2. 打开 %b.github/workflows/ci.yml%b 配置你的业务构建与测试步骤（可参考 .github/workflow-templates/languages/）；\n" "${COLOR_CYAN}" "${COLOR_RESET}"
+  printf "  3. 若需随 GitHub Release 自动打包挂载语言制品，请将 %b.github/workflow-templates/languages/<lang>/release.yml%b 覆盖至 %b.github/workflows/release.yml%b；\n" "${COLOR_CYAN}" "${COLOR_RESET}" "${COLOR_CYAN}" "${COLOR_RESET}"
+  printf "  4. 运行 %bgit push origin main%b 推送你的新项目。\n\n" "${COLOR_CYAN}" "${COLOR_RESET}"
 else
   printf "\n推荐后续操作:\n"
   printf "  1. 运行 %bgit diff%b 查看具体变更细节；\n" "${COLOR_CYAN}" "${COLOR_RESET}"
   printf "  2. 参照 %bREADME.md%b 中的 <!-- TEMPLATE_SETUP_START --> 锚点，将模版教学更新为你自己的业务说明；\n" "${COLOR_CYAN}" "${COLOR_RESET}"
-  printf "  3. 打开 %b.github/workflows/ci.yml%b 配置你的业务构建与测试步骤；\n" "${COLOR_CYAN}" "${COLOR_RESET}"
-  printf "  4. 运行 %bbash scripts/commit.sh%b 提交你的项目初始化改动（或手动删除 scripts/setup.sh）。\n\n" "${COLOR_CYAN}" "${COLOR_RESET}"
+  printf "  3. 打开 %b.github/workflows/ci.yml%b 配置你的业务构建与测试步骤（可参考 .github/workflow-templates/languages/）；\n" "${COLOR_CYAN}" "${COLOR_RESET}"
+  printf "  4. 若需随 GitHub Release 自动打包挂载语言制品，请将 %b.github/workflow-templates/languages/<lang>/release.yml%b 覆盖至 %b.github/workflows/release.yml%b；\n" "${COLOR_CYAN}" "${COLOR_RESET}" "${COLOR_CYAN}" "${COLOR_RESET}"
+  printf "  5. 运行 %bbash scripts/commit.sh%b 提交你的项目初始化改动（或手动删除 scripts/setup.sh）。\n\n" "${COLOR_CYAN}" "${COLOR_RESET}"
 fi
