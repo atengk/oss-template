@@ -154,10 +154,11 @@ jobs:
       - name: 检出源码
         uses: actions/checkout@v4
 
-      - name: 运行 actionlint 扫描全部工作流与模版
-        uses: rhysd/actionlint-action@v1
-        with:
-          args: .github/workflows/*.yml .github/workflow-templates/**/*.yml
+      - name: 安装 actionlint 并扫描全部工作流与模版
+        run: |
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          find .github/workflows .github/workflow-templates -type f \( -name "*.yml" -o -name "*.yaml" \) -print0 | xargs -0 ./actionlint -color
+        shell: bash
 
   # ----------------------------------------------------------------------------
   # Job 5: 质量门禁终审盖戳 (分支保护规则唯一指定强绑门禁)
