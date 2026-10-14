@@ -132,9 +132,15 @@ jobs:
           mkdir -p dist
           python -m build --outdir dist/
           cd dist
-          sha256sum $(ls -1 | grep -v '^checksums\.txt$') > checksums.txt
-          echo "=== 构建产物校验和清单 ==="
-          cat checksums.txt
+          for file in *; do
+            if [ -f "$file" ] && [ "$file" != "checksums.txt" ]; then
+              sha256sum "$file"
+            fi
+          done > checksums.txt
+          if [ -s checksums.txt ]; then
+            echo "=== 构建产物校验和清单 ==="
+            cat checksums.txt
+          fi
 
       - name: 归档不可变制品附件
         uses: actions/upload-artifact@v4

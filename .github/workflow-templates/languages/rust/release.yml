@@ -127,8 +127,12 @@ jobs:
             find target/release -maxdepth 1 -type f -executable -exec cp {} dist/ \; 2>/dev/null || true
           fi
           cd dist
-          if ls * >/dev/null 2>&1; then
-            sha256sum $(ls -1 | grep -v '^checksums\.txt$') > checksums.txt
+          for file in *; do
+            if [ -f "$file" ] && [ "$file" != "checksums.txt" ]; then
+              sha256sum "$file"
+            fi
+          done > checksums.txt
+          if [ -s checksums.txt ]; then
             echo "=== 构建产物校验和清单 ==="
             cat checksums.txt
           fi
