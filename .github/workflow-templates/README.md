@@ -1,10 +1,14 @@
 # GitHub Actions 工作流模版库 (Workflow Templates)
 
-本目录为不同技术栈与业务场景提供标准、开箱即用的 GitHub Actions 流水线参考模版。
+本目录为不同技术栈与业务场景提供标准、开箱即用的 GitHub Actions 工业级流水线参考模版库。
+
+> [!IMPORTANT] **⚠️ 下游项目使用核心原则：请参考本目录模版，勿直接使用根目录工作流！**
+> - **根目录 `.github/workflows/`**：仅用于 `oss-template` 模板工程自身的 Shell 脚本自检与轻量通用发版底座，**默认不包含**任何具体语言（Java/Node/Go/Python/Rust）的单测、静态扫描、制品打包与中心仓库（PyPI/npm/Maven/Docker）分发逻辑；
+> - **本目录 `.github/workflow-templates/`**：才是下游各业务项目应当引用的**正式生产级流水线资产库**。
 
 > [!NOTE] **为什么放在本目录？**
 > GitHub Actions 引擎**仅会自动执行** `.github/workflows/` 顶层目录下的工作流。
-> 存放在 `.github/workflow-templates/` 下的模版文件**绝不会被自动触发**，可安全作为团队资产库进行版本化纳管与参考引用。
+> 存放在 `.github/workflow-templates/` 下的模版文件**绝不会被自动触发**，可安全作为团队资产库进行版本化纳管与按需复制引用。
 
 ---
 
@@ -46,12 +50,34 @@
 
 ---
 
-## 🚀 30 秒开箱指引
+## 🚀 极速开箱与下游集成指引
 
-当你在具体项目中需要启用流水线时，只需将对应模版拷贝至 `.github/workflows/`：
+### 🤖 方式一：AI Agent 跨项目智能集成（强烈推荐）
+
+在新项目或存量项目中，无需手动克隆或下载本仓库，直接复制开源模版 GitHub 地址与下方 Prompt 发送给 AI 助手（如 Antigravity、Cursor、Claude Code、GitHub Copilot）：
+
+> **📋 Agent 跨项目智能集成 Prompt (直接复制发给 AI)：**
+> ```text
+> 请参考开源模版仓库 https://github.com/atengk/oss-template ，为我当前的新项目智能集成生产级 GitHub Actions 流水线与工程规范：
+> 
+> 【关键注意】：下游使用时必须参考目标模版库的 .github/workflow-templates/ 目录，绝对不要直接使用其根目录的 .github/workflows/！
+> 
+> 请执行以下操作：
+> 1. 自动识别我当前项目的技术栈（Python / Java / Go / Node.js / Rust）与主干分支名称（main 或 master）；
+> 2. 从目标模版库的 .github/workflow-templates/languages/<当前语言>/ 中提取 ci.yml 与 release.yml，复制并落地为我项目中的 .github/workflows/ci.yml 和 .github/workflows/release.yml；
+> 3. （可选部署）如果我需要自动化部署，请从 .github/workflow-templates/deployments/ 选用对应部署模版写入 .github/workflows/；
+> 4. 引入工程规范底座：同步引入 .cliff.toml、.githooks/commit-msg、.github/dependabot.yml 与社区治理文档模版；
+> 5. 执行 git config core.hooksPath .githooks 激活提交守门；若无需本地脚本，请保持 scripts/ 吃灰或删除。
+> ```
+
+---
+
+### 🛠️ 方式二：命令行手动复制启用
+
+当你在具体项目中需要启用流水线时，只需将对应模版拷贝并**覆盖**至 `.github/workflows/`：
 
 > [!NOTE] **关于覆盖根目录已有工作流**：
-> 根目录 `.github/workflows/` 下默认提供了通用轻量底座（通用 ShellCheck 门禁与通用 git-cliff 发版底座）。
+> 根目录 `.github/workflows/` 下默认仅提供了通用轻量底座（通用 ShellCheck 门禁与通用 git-cliff 发版底座）。
 > 若要启用各语言专属的深度能力（单测执行、发行包编译与全自动化发版），直接将语言专属模版（`ci.yml` 与 `release.yml`）**覆盖复制**至 `.github/workflows/` 即可。
 
 ### 示例 1：后端微服务（Java 完整套件 + VPS 部署）

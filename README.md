@@ -43,7 +43,28 @@
 <!-- TEMPLATE_SETUP_START -->
 ## 🛠️ 快速开始与接入方案
 
-本项目不仅支持**从零创建新项目**，还完美支持为**已有存量项目无损引入现代开源规范**。请根据你的场景选择：
+> [!IMPORTANT] **⚠️ 下游项目使用核心原则：请参考 `.github/workflow-templates/`，切勿直接复用根目录 `.github/workflows/`！**
+> - **根目录 `.github/workflows/`**：仅为 `oss-template` 模板工程自身的 Shell 语法自测与通用日志生成底座，**不包含**具体语言（Java/Node/Go/Python/Rust）的单测、构建、打包与中心分发（PyPI/npm/Maven/Docker）能力；
+> - **模版库 `.github/workflow-templates/`**：才是面向各语言业务项目的**真实工业级生产流水线**。下游使用时，请务必从模版库中选用对应语言的 `ci.yml` 与 `release.yml` 覆盖至工作流目录。
+
+---
+
+### 🤖 黄金方案：直接输入 GitHub 地址，让 AI Agent 跨项目一键智能集成 (强烈推荐首选！)
+
+如果你正在开发一个新项目，或在一个已有存量项目中，**完全无需手动克隆或下载本仓库**！直接向你的 AI 编程助手（Antigravity / Cursor / Claude Code / GitHub Copilot 等）发送开源模板仓库地址 `https://github.com/atengk/oss-template` 与下方 Prompt 即可：
+
+> **📋 Agent 跨项目智能集成 Prompt (直接复制发给 AI)：**
+> ```text
+> 请参考开源模版仓库 https://github.com/atengk/oss-template ，为我当前的项目智能集成现代开源工程规范与 GitHub Actions 流水线：
+> 
+> 【核心原则与避坑】：
+> 1. 流水线模版来源：必须从目标仓库的【.github/workflow-templates/】目录中按需提取，绝对严禁直接使用其根目录的【.github/workflows/】！
+> 2. 智能技术栈对齐：自动探测我当前项目的编程语言（Python / Java / Go / Node.js / Rust）与默认主干分支（main 或 master）；
+> 3. 落地二元工作流：将目标仓库 .github/workflow-templates/languages/<当前语言>/ 下的 ci.yml 与 release.yml 复制落地为当前项目的 .github/workflows/ci.yml 和 .github/workflows/release.yml；
+> 4. （可选部署流水线）：若检测到需要云主机或容器部署，可从 .github/workflow-templates/deployments/ 选用对应部署模版；
+> 5. 引入提交守护与规范：引入 .cliff.toml、.githooks/commit-msg、.github/dependabot.yml 与社区治理文档模版（CODE_OF_CONDUCT.md、CONTRIBUTING.md、SECURITY.md 等并精准替换项目元数据）；
+> 6. 激活 Git 提交守门：执行 git config core.hooksPath .githooks；若偏好纯原生开发，可将 scripts/ 脚本保持吃灰或删除。
+> ```
 
 ---
 
@@ -71,7 +92,7 @@
   > 1. 全局精准替换上述元数据（包括 README.md、CODE_OF_CONDUCT.md、CONTRIBUTING.md、SECURITY.md、LICENSE、.github/ISSUE_TEMPLATE/config.yml 等）；
   > 2. 配置本地 Git 规范提交钩子：执行 git config core.hooksPath .githooks；
   > 3. 运行 bash scripts/setup.sh --clean -y 自动完成模版教学章节裁剪、清理 setup.sh 并创建初始提交（若偏好纯原生零脚本模式，可使用 --clean-all 一键彻底删除 scripts/ 目录）；
-  > 4. 【技术栈流水线对齐】：如果已确定技术栈（如 Python/Go/Java/Node/Rust），请从 .github/workflow-templates/languages/<lang>/ 复制对应的 ci.yml 与 release.yml 覆盖至 .github/workflows/，以启用专属单测与 Release 制品自动打包挂载；
+  > 4. 【技术栈流水线对齐】：下游业务项目必须参考并选用 .github/workflow-templates/languages/<lang>/ 下的二元模版（ci.yml 与 release.yml）覆盖至 .github/workflows/，以启用专属单测、打包与发版；严禁直接使用根目录默认工作流；
   > 5. 【可选极简选项】：如果我不打算使用 scripts/ 目录下的辅助脚本，请同时将 scripts/ 目录完整物理删除（本项目完全支持纯原生 Git 与 GitHub Web 网页端零脚本开发）。
   > ```
 
@@ -110,14 +131,14 @@
 > 执行原则：【外科手术式增量缝合，严禁破坏/覆盖任何现有业务代码、现有业务文档与现有构建逻辑】
 > 
 > 具体执行步骤：
-> 1. 资产与分支识别：探测当前项目的实际技术栈（Node.js/Java/Go/Python等）与主干分支名称（main 或 master）；
+> 1. 资产与分支识别：探测当前项目的实际技术栈（Node.js/Java/Go/Python/Rust 等）与主干分支名称（main 或 master）；
 > 2. 引入提交守门构件：
 >    - 引入 .githooks/commit-msg 守门 Conventional Commits；
 >    - 引入 scripts/commit.sh 作为可选日常提交助手；
-> 3. 引入自动化发版体系：
+> 3. 引入生产级二元流水线体系（重要：从模版库按需提取）：
 >    - 引入 .cliff.toml（适配 v?[0-9].* 标签正则）与 scripts/release.sh；
 >    - 在 scripts/release.sh 的 custom_bump_version 中按需解除本技术栈的版本号更新命令；
->    - 引入 .github/workflows/release.yml 双通道发版流水线（若需随 Release 自动打包挂载语言制品，可直接从 .github/workflow-templates/languages/<lang>/release.yml 引入）；
+>    - 【核心】：从目标模版库的 .github/workflow-templates/languages/<当前语言>/ 中提取专属的 ci.yml 与 release.yml 落地至当前项目的 .github/workflows/（严禁使用目标库根目录的自测工作流）；
 > 4. 社区治理与配置增量安全合并：
 >    - 引入 CODE_OF_CONDUCT.md、CONTRIBUTING.md、SECURITY.md 与 Issue/PR 模板；
 >    - 安全合并 .editorconfig、.gitattributes 与 .gitignore（仅增量追加规则，保留原有配置）；
@@ -129,7 +150,7 @@
 
 #### 🛠️ 方式 B：手动增量复制引入
 若偏好手动接入，只需将本模版的以下构件按需复制到你的项目中：
-1. **发版与日志**：复制 `.cliff.toml`、`scripts/release.sh` 与 `.github/workflows/release.yml`（若需随 Release 自动编译挂载语言制品，可直接选用对应语言专属的 `release.yml`）；
+1. **发版与流水线（核心）**：复制 `.cliff.toml`、`scripts/release.sh`；并从 `.github/workflow-templates/languages/<你的语言>/` 复制 `ci.yml` 与 `release.yml` 放入你项目的 `.github/workflows/` 中（切勿直接复制根目录的自测流水线）；
 2. **规范提交**：复制 `.githooks/commit-msg` 并执行 `git config core.hooksPath .githooks`（或直接使用 GitHub Squash Merge 软着陆）；
 3. **治理文档**：复制 `CODE_OF_CONDUCT.md`、`CONTRIBUTING.md`、`SECURITY.md` 并将其中占位符更新为你自己的项目信息；
 4. **工程底座配置**：按需复制或增量合并 `.editorconfig`、`.gitattributes`、`.gitignore`、`.dockerignore` 与 `.github/dependabot.yml`。
@@ -203,13 +224,14 @@ GitHub Actions 将会自动执行 [`.github/workflows/release.yml`](./.github/wo
 1. 提取自上一版本以来的全部合并 PR 与提交记录；
 2. 自动生成 GitHub Release 详情并归类贡献者；
 3. 将打包产物与 `checksums.txt` 安全校验清单自动挂载至 Release 页面附件（若配置了构建步骤）；
-4. **制品分发与容器镜像解耦设计**：若需自动将产物分发至官方中心仓库（Maven Central / npm / PyPI / Crates.io 等）或构建多架构 Docker 镜像推送至 GHCR，可直接选用模版库中解耦的 `publish.yml` 与 `docker.yml`。
+4. **统合发版编排器设计**：在各语言专属发版模版中，执行“单次构建测试，三路并行分发”——统一复用同一份构建产物，同步完成 GitHub Release 挂载、官方包管理器分发（PyPI / npm / Maven / Crates.io）与多架构 Docker 镜像推送（GHCR），彻底杜绝重复打包与产物哈希漂移。
 
-> [!IMPORTANT] **通用 Release 底座 vs. 语言专属制品打包 Release**：
-> - **根目录底座 (`.github/workflows/release.yml`)**：提供纯净通用的发版底座（基于 git-cliff 提取更新日志、创建 GitHub Release 并支持网页端参数化发版），默认**不包含**具体语言的编译打包任务；
-> - **语言专属发版 (`.github/workflow-templates/languages/<lang>/release.yml`)**：内置了对应语言完整的发行制品编译与自动挂载逻辑（例如 Python 的 sdist/wheel、Java 的 JAR、Go/Rust 的预编译二进制、Node 的 TGZ 以及全套 SHA256 `checksums.txt`）；
-> - **覆盖指引**：若你的项目需要随 GitHub Release 自动打包并挂载语言制品附件，请在初始化后直接将对应语言模版**覆盖复制**至工作流目录：
+> [!IMPORTANT] **通用 Release 底座 vs. 语言专属统合发版流水线**：
+> - **根目录底座 (`.github/workflows/release.yml`)**：提供纯净通用的发版底座（基于 git-cliff 提取更新日志、创建 GitHub Release 并支持网页端参数化发版），默认**不包含**具体语言的编译打包与中心仓库推送任务；
+> - **语言专属发版 (`.github/workflow-templates/languages/<lang>/release.yml`)**：内置了对应语言完整的发行制品编译、哈希校验、包管理器发布与 Docker 镜像构建全流程；
+> - **覆盖指引**：若你的项目需要随 GitHub Release 自动打包、发布包与构建镜像，请在初始化后直接将对应语言模版**覆盖复制**至工作流目录：
 >   ```bash
+>   cp .github/workflow-templates/languages/<language>/ci.yml .github/workflows/ci.yml
 >   cp .github/workflow-templates/languages/<language>/release.yml .github/workflows/release.yml
 >   ```
 
@@ -220,19 +242,19 @@ GitHub Actions 将会自动执行 [`.github/workflows/release.yml`](./.github/wo
 
 ## 🧩 GitHub Actions 流水线模版资产库 (Workflow Templates)
 
-本项目在 [`.github/workflow-templates/`](./.github/workflow-templates/) 中沉淀了 **28 套开箱即用、自包含且经过工业级加固** 的 GitHub Actions 生产级流水线参考模版：
+本项目在 [`.github/workflow-templates/`](./.github/workflow-templates/) 中沉淀了 **18 套开箱即用、工业级加固且经过真实 CI 检验** 的 GitHub Actions 生产级流水线参考模版：
 
-### 1. 5 大主流语言生态全套流水线 (`languages/`)
+### 1. 5 大主流语言生态专属流水线 (`languages/`)
 
-针对主流语言生态采用 **「4 文件自包含套件」** 设计，每个语言均拥有完整的独立闭环：
+针对主流语言生态全面落地 **标准二元模型（Dual-Workflow Standard）** 设计：每个语言严格保持 `ci.yml`（持续集成与质量门禁）与 `release.yml`（统合发版编排器）两大核心工作流，彻底消灭算力浪费与双跑冲突：
 
-| 语言生态 | 套件路径 | 持续集成 (CI) | GitHub 发版与产物挂载 (Release) | 生态包发布 (Publish) | 容器镜像构建 (Docker) |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Java** | [languages/java/](./.github/workflow-templates/languages/java/) | Maven 构建、测试、Spotless 格式检查 | 双通道发版、git-cliff 日志、JAR 产物与 Checksums | Maven Central (Sonatype Central) 发布 | Spring Boot 多架构 Docker 镜像 (GHCR) |
-| **Node.js** | [languages/node/](./.github/workflow-templates/languages/node/) | pnpm 依赖缓存、TS 编译、ESLint、Vitest | 双通道发版、git-cliff 日志、离线 TGZ 与 Checksums | npm 官方仓库发布 (Provenance / Token) | 前端 / Node 应用多架构 Docker 镜像 (GHCR) |
-| **Go** | [languages/go/](./.github/workflow-templates/languages/go/) | Go 依赖缓存、golangci-lint、竞态测试 | 双通道发版、git-cliff 日志、二进制产物与 Checksums | GoReleaser 交叉编译全平台二进制分发 | 极简多架构 Docker 镜像 (GHCR) |
-| **Python** | [languages/python/](./.github/workflow-templates/languages/python/) | pip 缓存、Ruff 代码规范检查、pytest 测试 | 双通道发版、git-cliff 日志、sdist/wheel 与 Checksums | PyPI 官方包发布 (Trusted Publishing OIDC) | 容器化应用打包与发布 (GHCR) |
-| **Rust** | [languages/rust/](./.github/workflow-templates/languages/rust/) | rust-cache 缓存、Clippy 扫描、cargo fmt | 双通道发版、git-cliff 日志、编译产物与 Checksums | Crates.io 官方发布与预编译资产挂载 | 极简多架构 Docker 镜像 (GHCR) |
+| 语言生态 | 套件路径 | 持续集成质量门禁 (ci.yml) | 统合发版编排流水线 (release.yml) |
+| :--- | :--- | :--- | :--- |
+| **Java** | [languages/java/](./.github/workflow-templates/languages/java/) | PR 标题门禁、动态路径短路、Java LTS (17/21) 兼容性矩阵、Maven 构建与测试、Spotless 格式检查、终审看板 | 单次构建 (JAR + Checksums)、GitHub Release、Maven Central 官方发布 (GPG)、Spring Boot 多架构 Docker (GHCR) |
+| **Node.js** | [languages/node/](./.github/workflow-templates/languages/node/) | PR 标题门禁、动态路径短路、Node.js (18/20/22) 兼容性矩阵、pnpm 依赖缓存、TS 编译、ESLint、Vitest、终审看板 | 单次打包 (pnpm pack TGZ + Checksums)、GitHub Release、npm 官方仓库发布 (OIDC)、Node 应用多架构 Docker (GHCR) |
+| **Go** | [languages/go/](./.github/workflow-templates/languages/go/) | PR 标题门禁、动态路径短路、Go 依赖缓存、golangci-lint 扫描、跨版本数据竞态测试 (-race)、终审看板 | 交叉编译全平台二进制、SHA-256 Checksums、GitHub Release、Go 极简多架构 Docker (GHCR) |
+| **Python** | [languages/python/](./.github/workflow-templates/languages/python/) | PR 标题门禁、动态路径短路、pip 缓存、Ruff 规范检查、pytest 跨版本 (3.10~3.12) 测试矩阵、终审看板 | 单次构建 (sdist/wheel + Checksums)、GitHub Release、PyPI 官方发布 (Trusted Publishing OIDC)、Python 容器镜像 (GHCR) |
+| **Rust** | [languages/rust/](./.github/workflow-templates/languages/rust/) | PR 标题门禁、动态路径短路、rust-cache 缓存、Clippy 严苛扫描 (-D warnings)、cargo fmt、单测、终审看板 | 生产级二进制编译 (Checksums)、GitHub Release、Crates.io 官方发布、Rust 极简多架构 Docker (GHCR) |
 
 ### 2. 8 大通用生产上线部署流水线 (`deployments/`)
 
@@ -262,10 +284,10 @@ GitHub Actions 将会自动执行 [`.github/workflows/release.yml`](./.github/wo
 │   │   ├── bug_report.md           # Bug 缺陷反馈模版
 │   │   ├── feature_request.md      # 新特性建议模版
 │   │   └── config.yml              # Issue 治理配置 (关闭空白 Issue & 导流 Discussions)
-│   ├── workflow-templates/         # 5 大主流语言完整套件 (CI/Release/Publish/Docker) 与 8 大生产部署流水线资产库
-│   ├── workflows/
-│   │   ├── ci.yml                  # 业务构建测试（含 PR 标题与 Shell 语法守门）
-│   │   └── release.yml             # 自动化发版、提取更新日志与 Release 资产挂载（双通道驱动，生态分发解耦至模版库）
+│   ├── workflow-templates/         # 5 大主流语言专属二元流水线 (CI/Release) 与 8 大生产部署流水线资产库 (共 18 套模版)
+│   ├── workflows/                  # 模版库自身的自测底座 (CI 门禁与通用发版；下游业务项目请选用 workflow-templates)
+│   │   ├── ci.yml                  # 本仓库自测门禁（PR 标题规范与 Shell 脚本质量守门）
+│   │   └── release.yml             # 本仓库轻量通用发版底座（基于 git-cliff 提取日志与 Release 资产）
 │   ├── CODEOWNERS                  # 代码属主与 PR 审阅者自动指派配置
 │   ├── dependabot.yml              # GitHub Actions 及多技术栈依赖月度自动巡检配置
 │   └── PULL_REQUEST_TEMPLATE.md    # Pull Request 提交模版

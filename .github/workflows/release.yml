@@ -1,6 +1,10 @@
 # ==============================================================================
 # 工作流：自动化发版与变更日志生成流水线 (GitHub Release)
 # 适用场景：开源工程的通用 GitHub Release 自动化发版、更新日志提取与制品附件挂载
+# ⚠️ 注意（下游项目使用须知）：
+#   本工作流仅提供通用的 git-cliff 日志提取与基础 Release 创建底座（不含各语言制品的编译打包与中心包分发）！
+#   下游业务项目（Java / Python / Go / Node.js / Rust）如需编译发布制品并推送至 PyPI/npm/Maven/Docker 等，
+#   请勿直接使用本文件，请前往【.github/workflow-templates/languages/<你的语言>/release.yml】选用专属统合发版流水线。
 # 触发通道：
 #   - 网页手动触发 (workflow_dispatch)：在 Actions 界面输入版本号 (如 v1.0.0)，
 #     自动校验语义化格式、主干分支、远端标签唯一性后创建 Git Tag 并推送发版
