@@ -66,41 +66,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      code_changed: ${{ steps.filter.outputs.code_changed }}
+      code_changed: ${{ steps.filter.outputs.code }}
     steps:
       - name: 检出源码
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
+        uses: actions/checkout@v7
 
       - name: 分析改动文件类型
+        uses: dorny/paths-filter@v4
         id: filter
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch origin ${{ github.base_ref }} --depth=1
-            CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD 2>/dev/null || true)
-          else
-            if git rev-parse HEAD~1 >/dev/null 2>&1; then
-              CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || true)
-            else
-              CHANGED_FILES="all"
-            fi
-          fi
-
-          if [ -z "$CHANGED_FILES" ]; then
-            echo "code_changed=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          CORE_CHANGES=$(echo "$CHANGED_FILES" | grep -vE '^(\.gitignore|\.editorconfig|LICENSE|.*\.md|docs/.*)$' || true)
-          if [ -n "$CORE_CHANGES" ]; then
-            echo "检测到核心 Node.js 源码/配置变更:"
-            echo "$CORE_CHANGES"
-            echo "code_changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "仅检测到文档或说明文件变更，触发短路直通模式。"
-            echo "code_changed=false" >> "$GITHUB_OUTPUT"
-          fi
+        with:
+          filters: |
+            code:
+              - '!(*.md|docs/**|.gitignore|.editorconfig|LICENSE)'
 
   # ----------------------------------------------------------------------------
   # Job 3: 代码风格与类型校验 (Lint & Typecheck)
@@ -113,7 +90,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: 检出源码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 安装 pnpm
         uses: pnpm/action-setup@v4
@@ -121,7 +98,7 @@ jobs:
           version: 9
 
       - name: 设置 Node.js 环境
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: 'pnpm'
@@ -150,7 +127,7 @@ jobs:
 
     steps:
       - name: 检出源码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 安装 pnpm
         uses: pnpm/action-setup@v4
@@ -158,7 +135,7 @@ jobs:
           version: 9
 
       - name: 设置 Node.js 环境
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'pnpm'

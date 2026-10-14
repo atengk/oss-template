@@ -45,7 +45,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: 检出源码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 静态校验工程脚本与 Git 钩子语法与规范 (Bash Syntax & ShellCheck)
         run: |
@@ -79,7 +79,7 @@ jobs:
 
     steps:
       - name: 检出源码 (全量历史供日志生成)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}

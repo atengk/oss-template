@@ -50,7 +50,7 @@ jobs:
       url: https://your-domain.com # 替换为实际服务对外访问域名
     steps:
       - name: 检出源码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 执行 SSH 远端部署指令 (Docker Compose)
         uses: appleboy/ssh-action@v1

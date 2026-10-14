@@ -44,7 +44,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: 检出源码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 安装 Rust 工具链
         uses: dtolnay/rust-toolchain@master
@@ -73,11 +73,21 @@ jobs:
       tag_name: ${{ steps.meta.outputs.tag_name }}
       raw_version: ${{ steps.meta.outputs.raw_version }}
       is_prerelease: ${{ steps.meta.outputs.is_prerelease }}
+      has_dockerfile: ${{ steps.probe.outputs.has_dockerfile }}
     steps:
       - name: 检出源码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
+
+      - name: 探测项目 Dockerfile 存在性
+        id: probe
+        run: |
+          if [ -f Dockerfile ] || [ -f Containerfile ] || [ -f docker/Dockerfile ]; then
+            echo "has_dockerfile=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_dockerfile=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: 解析与校验发版版本号
         id: meta
@@ -138,7 +148,7 @@ jobs:
           fi
 
       - name: 归档不可变制品附件
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-dist
           path: dist/*
@@ -156,12 +166,12 @@ jobs:
       contents: write
     steps:
       - name: 检出源码 (全量历史供日志生成)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: 下载构建制品
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-dist
           path: dist
@@ -196,22 +206,18 @@ jobs:
     name: 发布至 Crates.io
     runs-on: ubuntu-latest
     needs: [build-artifacts]
+    if: vars.ENABLE_CRATES_PUBLISH == 'true'
     timeout-minutes: 15
-    env:
-      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
     steps:
       - name: 检出源码
-        if: env.CARGO_REGISTRY_TOKEN != ''
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 安装 Rust 工具链
-        if: env.CARGO_REGISTRY_TOKEN != ''
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
 
       - name: 发布至 Crates.io
-        if: env.CARGO_REGISTRY_TOKEN != ''
         run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   # ----------------------------------------------------------------------------
@@ -221,6 +227,7 @@ jobs:
     name: 构建并推送 Docker 镜像 (GHCR)
     runs-on: ubuntu-latest
     needs: [build-artifacts]
+    if: needs.build-artifacts.outputs.has_dockerfile == 'true'
     timeout-minutes: 30
     permissions:
       contents: read
@@ -230,7 +237,7 @@ jobs:
         run: echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
 
       - name: 检出源码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 设置 QEMU 模拟器 (多架构支持)
         uses: docker/setup-qemu-action@v4
@@ -277,7 +284,7 @@ jobs:
   summary:
     name: 输出发版看板报告
     runs-on: ubuntu-latest
-    needs: [build-artifacts, publish-release, publish-docker]
+    needs: [build-artifacts, publish-release, publish-crates, publish-docker]
     if: always()
     timeout-minutes: 5
     steps:
@@ -292,7 +299,8 @@ jobs:
             echo "| :--- | :---: | :--- |"
             echo "| **发版版本** | \`$TAG\` | ${{ needs.build-artifacts.outputs.is_prerelease == 'true' && '🧪 Pre-release' || '🎉 稳定正式版' }} |"
             echo "| **GitHub Release** | ${{ needs.publish-release.result == 'success' && '✅ 成功' || '❌ 失败' }} | 二进制附件与校验和已就绪 |"
-            echo "| **GHCR 容器镜像** | ${{ needs.publish-docker.result == 'success' && '✅ 成功' || '❌ 失败' }} | 多架构 \`linux/amd64,arm64\` 镜像已推送 |"
+            echo "| **Crates.io 官方分发** | ${{ needs.publish-crates.result == 'success' && '✅ 成功' || (needs.publish-crates.result == 'skipped' && '⚡ 已跳过 (未启用)' || '❌ 失败') }} | crates.io 发布 |"
+            echo "| **GHCR 容器镜像** | ${{ needs.publish-docker.result == 'success' && '✅ 成功' || (needs.publish-docker.result == 'skipped' && '⚡ 已跳过 (无 Dockerfile)' || '❌ 失败') }} | 多架构 \`linux/amd64,arm64\` 镜像已推送 |"
             echo ""
             echo "### 📦 运行验证"
             echo '```bash'

@@ -54,7 +54,7 @@ jobs:
       url: https://your-domain.com # 替换为实际业务访问域名
     steps:
       - name: 检出源码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 安装与配置 kubectl 工具链
         uses: azure/setup-kubectl@v4

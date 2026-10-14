@@ -46,7 +46,7 @@ jobs:
       url: https://your-domain.com # 替换为实际服务对外访问地址
     steps:
       - name: 检出源码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 下发 Webhook 触发指令
         run: |
