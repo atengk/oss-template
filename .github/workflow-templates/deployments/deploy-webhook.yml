@@ -2,22 +2,21 @@
 # 部署模版：通用 Webhook 回调自动化部署 (Webhook)
 # 适用场景：Portainer Webhook、Watchtower、Coolify、Dokku、1Panel、宝塔或自建 CI/CD 运维面板
 # 触发通道：
-#   - push: 主干分支 (main, master) 提交代码自动触发
-#   - workflow_dispatch: 网页控制台手动触发 (支持传入指定服务与环境参数)
+#   - 网页控制台手动触发 (workflow_dispatch)：支持传入指定服务与环境参数
+#   - 💡 安全防呆设计：生产运维 Webhook 默认严格禁用 push 自动穿透，杜绝未经测试的代码误上线；
+#     如需在特定场景下实现自动化 CD，可配置 on.workflow_run 监听 Release 或 CI 成功事件。
 # 核心依赖凭据 (Secrets)：
 #   - WEBHOOK_URL: 目标运维平台接收部署通知的 HTTP/HTTPS Webhook 地址 (必填)
 #   - WEBHOOK_TOKEN: 用于 Bearer 认证的请求令牌 (可选)
 # 核心特性：
 #   - 构造结构化 JSON Payload (含仓库、分支、Commit SHA、触发者、环境与服务名称)
 #   - 支持 HTTP POST 请求自动重试 (3 次重试，超时保护 30 秒)
-#   - 内置线上服务健康探测与冒烟测试 (Smoke Test)
+#   - 内置线上服务健康探测、超时保护与 Step Summary 看板输出
 # ==============================================================================
 
 name: Deploy - Webhook
 
 on:
-  push:
-    branches: [main, master]
   workflow_dispatch:
     inputs:
       service:
@@ -41,6 +40,7 @@ jobs:
   deploy-webhook:
     name: 触发 Webhook 自动化部署
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: production
       url: https://your-domain.com # 替换为实际服务对外访问地址
@@ -48,54 +48,65 @@ jobs:
       - name: 检出源码
         uses: actions/checkout@v4
 
-      # ------------------------------------------------------------------------
-      # 通用 Webhook 部署触发器
-      # 适用平台：Portainer Webhook、Watchtower、Coolify、Dokku、宝塔 Webhook、自建发布平台
-      # 所需配置：在仓库 Settings -> Secrets 中配置 WEBHOOK_URL (必填) 与 WEBHOOK_TOKEN (可选)
-      # ------------------------------------------------------------------------
       - name: 下发 Webhook 触发指令
         run: |
           set -e
 
           WEBHOOK_URL="${{ secrets.WEBHOOK_URL }}"
+          WEBHOOK_TOKEN="${{ secrets.WEBHOOK_TOKEN }}"
+          TARGET_SERVICE="${{ inputs.service || '' }}"
+          TARGET_ENV="${{ inputs.environment || 'production' }}"
+
           if [ -z "$WEBHOOK_URL" ]; then
-            echo "::error::未配置 secrets.WEBHOOK_URL，无法触发部署！请在仓库 Secrets 中配置目标 Webhook 地址。"
+            echo "错误: 未配置 secrets.WEBHOOK_URL！请在仓库 Settings -> Secrets 中添加对应目标地址。"
             exit 1
           fi
 
-          echo "正在向目标 Webhook 发送部署通知..."
+          AUTH_HEADER=""
+          if [ -n "$WEBHOOK_TOKEN" ]; then
+            AUTH_HEADER="Authorization: Bearer $WEBHOOK_TOKEN"
+          fi
 
-          # 构建标准部署 Payload
+          echo "正在向目标平台下发 Webhook 部署通知..."
           PAYLOAD=$(cat <<EOF
           {
+            "event": "deploy",
             "repository": "${{ github.repository }}",
-            "ref": "${{ github.ref_name }}",
-            "commit": "${{ github.sha }}",
+            "ref": "${{ github.ref }}",
+            "sha": "${{ github.sha }}",
             "actor": "${{ github.actor }}",
-            "event": "${{ github.event_name }}",
-            "environment": "${{ inputs.environment || 'production' }}",
-            "service": "${{ inputs.service || '' }}"
+            "environment": "$TARGET_ENV",
+            "service": "$TARGET_SERVICE",
+            "timestamp": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           }
           EOF
           )
 
-          AUTH_HEADER=""
-          if [ -n "${{ secrets.WEBHOOK_TOKEN }}" ]; then
-            AUTH_HEADER="Authorization: Bearer ${{ secrets.WEBHOOK_TOKEN }}"
+          if [ -n "$AUTH_HEADER" ]; then
+            RESPONSE_CODE=$(curl -s -o response.log -w "%{http_code}" \
+              --retry 3 --retry-delay 3 --max-time 30 \
+              -X POST \
+              -H "Content-Type: application/json" \
+              -H "$AUTH_HEADER" \
+              -d "$PAYLOAD" \
+              "$WEBHOOK_URL")
+          else
+            RESPONSE_CODE=$(curl -s -o response.log -w "%{http_code}" \
+              --retry 3 --retry-delay 3 --max-time 30 \
+              -X POST \
+              -H "Content-Type: application/json" \
+              -d "$PAYLOAD" \
+              "$WEBHOOK_URL")
           fi
 
-          # 发送 HTTP POST 请求，支持 3 次重试
-          curl --fail \
-            --retry 3 \
-            --retry-delay 3 \
-            --max-time 30 \
-            -X POST \
-            -H "Content-Type: application/json" \
-            ${AUTH_HEADER:+-H "$AUTH_HEADER"} \
-            -d "$PAYLOAD" \
-            "$WEBHOOK_URL"
-
-          echo "✅ Webhook 部署触发指令已成功下发！"
+          echo "目标服务器响应 HTTP 状态码: $RESPONSE_CODE"
+          if [ "$RESPONSE_CODE" -ge 200 ] && [ "$RESPONSE_CODE" -lt 300 ]; then
+            echo "✅ 目标运维面板 Webhook 接收成功！"
+          else
+            echo "错误: Webhook 请求失败，响应内容如下:"
+            cat response.log
+            exit 1
+          fi
 
       - name: 生产环境健康检查与冒烟测试 (Smoke Test)
         run: |
@@ -107,3 +118,18 @@ jobs:
             curl --fail --retry 5 --retry-delay 5 --max-time 10 "$HEALTH_URL"
             echo "✅ 线上服务健康检查通过！"
           fi
+
+      - name: 输出部署看板摘要
+        if: always()
+        run: |
+          {
+            echo "## 🪝 Webhook 自动化部署看板"
+            echo ""
+            echo "| 属性 | 配置值 |"
+            echo "| :--- | :--- |"
+            echo "| **目标环境** | \`${{ inputs.environment || 'production' }}\` |"
+            echo "| **目标服务** | \`${{ inputs.service || '全量服务更新' }}\` |"
+            echo "| **触发者** | \`${{ github.actor }}\` |"
+            echo ""
+            echo "✅ Webhook 部署通知下发成功！"
+          } >> "$GITHUB_STEP_SUMMARY"

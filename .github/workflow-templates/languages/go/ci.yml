@@ -1,14 +1,15 @@
 # ==============================================================================
 # 工作流模版：Go 持续集成流水线 (Go CI)
-# 适用场景：Go 模块与微服务项目的 PR 门禁与代码质量保障
+# 适用场景：Go 模块、开源类库与后端微服务的 PR 门禁与代码质量保障
 # 触发条件：
 #   - push: 主干分支 (main, master) 代码推送
 #   - pull_request: 针对主干分支的 PR 创建、编辑、代码同步
 # 核心特性：
-#   - Conventional Commits PR 标题规范静态校验
-#   - Go 官方依赖缓存加速 (actions/setup-go)
-#   - 现代代码质量扫描 (golangci-lint)
-#   - 单元测试与数据竞态检测 (-race)
+#   - 动态并发控制 (Dynamic Concurrency)：PR 提交自动中断陈旧运行，主干提交按序排队
+#   - 内部路径短路直通 (Path Fast-Pass)：纯文档改动秒级放行，彻底消除分支保护规则死锁
+#   - 分层兼容性矩阵 (Matrix Strategy)：PR 快速验证核心版本，主干全量扫描多版本兼容性
+#   - 现代代码质量扫描 golangci-lint 与数据竞态检测 (-race)
+#   - 终审门禁看板 (All Checks Passed)：统一盖戳并直出 GitHub Step Summary 结构化报表
 # ==============================================================================
 
 name: Go CI
@@ -20,12 +21,10 @@ on:
     branches: [main, master]
     types: [opened, edited, synchronize, reopened]
 
-# 并发控制：同一分支/PR 有新提交时自动取消正在执行的陈旧构建，防止竞态并节省 Runner 资源
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# 最小权限原则：仅授予代码仓库读取权限
 permissions:
   contents: read
 
@@ -37,6 +36,7 @@ jobs:
     name: 校验 PR 标题规范
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    timeout-minutes: 5
     permissions:
       pull-requests: read
     steps:
@@ -59,32 +59,165 @@ jobs:
             revert
 
   # ----------------------------------------------------------------------------
-  # Job 2: 依赖下载、静态代码分析、单元测试与二进制验证
+  # Job 2: 动态探测变更路径 (实现内部短路直通网关)
+  # ----------------------------------------------------------------------------
+  detect-changes:
+    name: 探测变更路径
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code_changed: ${{ steps.filter.outputs.code_changed }}
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: 分析改动文件类型
+        id: filter
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin ${{ github.base_ref }} --depth=1
+            CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD 2>/dev/null || true)
+          else
+            if git rev-parse HEAD~1 >/dev/null 2>&1; then
+              CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || true)
+            else
+              CHANGED_FILES="all"
+            fi
+          fi
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "code_changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          CORE_CHANGES=$(echo "$CHANGED_FILES" | grep -vE '^(\.gitignore|\.editorconfig|LICENSE|.*\.md|docs/.*)$' || true)
+          if [ -n "$CORE_CHANGES" ]; then
+            echo "检测到核心 Go 源码/配置变更:"
+            echo "$CORE_CHANGES"
+            echo "code_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "仅检测到文档或说明文件变更，触发短路直通模式。"
+            echo "code_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ----------------------------------------------------------------------------
+  # Job 3: 代码风格与质量分析 (golangci-lint)
+  # ----------------------------------------------------------------------------
+  lint:
+    name: 代码规范静态分析 (golangci-lint)
+    runs-on: ubuntu-latest
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.code_changed != 'false'
+    timeout-minutes: 10
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@v4
+
+      - name: 设置 Go 环境
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          cache: true
+
+      - name: 运行 golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m
+
+  # ----------------------------------------------------------------------------
+  # Job 4: 跨版本单元测试与数据竞态分析 (-race)
   # ----------------------------------------------------------------------------
   test:
-    name: 静态检查、测试与构建 (Go 1.22+)
+    name: 单元测试 (Go ${{ matrix.go-version }})
     runs-on: ubuntu-latest
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.code_changed != 'false'
+    timeout-minutes: 15
+    strategy:
+      fail-fast: ${{ github.event_name == 'pull_request' }}
+      matrix:
+        go-version: ${{ github.event_name == 'pull_request' && fromJSON('["1.23"]') || fromJSON('["1.22", "1.23"]') }}
 
     steps:
       - name: 检出源码
         uses: actions/checkout@v4
 
-      - name: 设置 Go 开发环境
+      - name: 设置 Go 环境
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22' # 推荐稳健版本；如需升级最新版可修改为 '1.23' 或 'stable'
-          cache: true        # 自动缓存 go.mod 下载的依赖与构建缓存
+          go-version: ${{ matrix.go-version }}
+          cache: true
 
-      - name: 下载与校验依赖
-        run: go mod download
+      - name: 下载依赖并校验模块
+        run: |
+          go mod download
+          go mod verify
 
-      - name: 代码质量与规范检查 (golangci-lint)
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: v1.59 # 如需使用最新 linter 可修改为 'latest' 或具体版本号
+      - name: 执行单元测试与数据竞态分析
+        run: go test -v -race -coverprofile=coverage.out ./...
 
-      - name: 运行单元测试与竞态检测
-        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+  # ----------------------------------------------------------------------------
+  # Job 5: 质量门禁终审盖戳 (分支保护规则唯一指定强绑门禁)
+  # ----------------------------------------------------------------------------
+  all-checks-passed:
+    name: 质量门禁终审 (All Checks Passed)
+    runs-on: ubuntu-latest
+    needs: [detect-changes, validate-pr-title, lint, test]
+    if: always()
+    timeout-minutes: 5
+    steps:
+      - name: 汇总校验各任务执行结果
+        run: |
+          TITLE_RESULT="${{ needs.validate-pr-title.result }}"
+          DETECT_RESULT="${{ needs.detect-changes.result }}"
+          LINT_RESULT="${{ needs.lint.result }}"
+          TEST_RESULT="${{ needs.test.result }}"
 
-      - name: 验证二进制可编译性
-        run: go build -v ./...
+          echo "任务状态汇总: PR标题=[$TITLE_RESULT], 变更探测=[$DETECT_RESULT], 规范扫描=[$LINT_RESULT], 单测矩阵=[$TEST_RESULT]"
+
+          if [ "$TITLE_RESULT" = "failure" ] || [ "$TITLE_RESULT" = "cancelled" ]; then
+            echo "::error::PR 标题规范校验失败！请按照 Conventional Commits 规范修改 PR 标题。"
+            exit 1
+          fi
+
+          if [ "$DETECT_RESULT" = "failure" ] || [ "$DETECT_RESULT" = "cancelled" ]; then
+            echo "::error::变更路径探测任务异常中断！"
+            exit 1
+          fi
+
+          if [ "$LINT_RESULT" = "failure" ] || [ "$LINT_RESULT" = "cancelled" ]; then
+            echo "::error::golangci-lint 代码规范扫描失败！"
+            exit 1
+          fi
+
+          if [ "$TEST_RESULT" = "failure" ] || [ "$TEST_RESULT" = "cancelled" ]; then
+            echo "::error::Go 单元测试失败！门禁熔断阻断。"
+            exit 1
+          fi
+
+          echo "✅ 全部必要质量门禁已全部通过！"
+
+      - name: 生成门禁看板摘要报告
+        if: always()
+        run: |
+          {
+            echo "## 🚦 Go CI 质量门禁终审报告"
+            echo ""
+            echo "| 检查项 | 判定状态 | 执行说明 |"
+            echo "| :--- | :---: | :--- |"
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              echo "| **PR 标题规范校验** | ${{ needs.validate-pr-title.result == 'success' && '✅ 通过' || '❌ 失败' }} | Conventional Commits 语义化规范 |"
+            fi
+            echo "| **变更路径探测** | ${{ needs.detect-changes.result == 'success' && '✅ 通过' || '❌ 异常' }} | 区分文档短路与核心代码构建 |"
+            if [ "${{ needs.detect-changes.outputs.code_changed }}" = "false" ]; then
+              echo "| **代码规范与测试** | ⚡ 短路直通 | 仅涉及文档改动，自动跳过耗时测试并放行 |"
+            else
+              echo "| **golangci-lint 扫描** | ${{ needs.lint.result == 'success' && '✅ 通过' || '❌ 失败' }} | 静态语法与代码规范扫描 |"
+              echo "| **Go 单元测试 (-race)** | ${{ needs.test.result == 'success' && '✅ 通过' || '❌ 失败' }} | 数据竞态检测与跨版本验证 |"
+            fi
+            echo ""
+            echo "> 💡 **分支保护规则建议**：请在 GitHub 仓库设置中将 \`质量门禁终审 (All Checks Passed)\` 设为唯一 Required Status Check。"
+          } >> "$GITHUB_STEP_SUMMARY"

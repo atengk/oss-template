@@ -1,15 +1,15 @@
 # ==============================================================================
 # 工作流模版：Rust 持续集成流水线 (Rust CI)
-# 适用场景：Rust 库、CLI 工具与系统服务的 PR 门禁与代码质量保障
+# 适用场景：Rust 类库、CLI 工具与系统服务的 PR 门禁与代码质量保障
 # 触发条件：
 #   - push: 主干分支 (main, master) 代码推送
 #   - pull_request: 针对主干分支的 PR 创建、编辑、代码同步
 # 核心特性：
-#   - Conventional Commits PR 标题规范静态校验
-#   - 极速稳定 Rust 官方工具链安装 (dtolnay/rust-toolchain@master)
-#   - 智能 Cargo 依赖与构建中间产物缓存 (swatinem/rust-cache@v2)
-#   - 官方代码格式化扫描 (cargo fmt --check) 与严格 Clippy 静态检查 (-D warnings)
-#   - 全特性全目标单元测试与集成测试 (cargo test --all-targets --all-features)
+#   - 动态并发控制 (Dynamic Concurrency)：PR 提交自动中断陈旧运行，主干提交按序排队
+#   - 内部路径短路直通 (Path Fast-Pass)：纯文档改动秒级放行，彻底消除分支保护规则死锁
+#   - 官方 rust-toolchain 工具链与 Swatinem/rust-cache 依赖极致缓存
+#   - 代码格式化 (cargo fmt) 与严苛静态检查 (cargo clippy -- -D warnings)
+#   - 终审门禁看板 (All Checks Passed)：统一盖戳并直出 GitHub Step Summary 结构化报表
 # ==============================================================================
 
 name: Rust CI
@@ -21,12 +21,10 @@ on:
     branches: [main, master]
     types: [opened, edited, synchronize, reopened]
 
-# 并发控制：同一分支/PR 有新提交时自动取消正在执行的陈旧构建，防止竞态并节省 Runner 资源
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# 最小权限原则：仅授予代码仓库读取权限
 permissions:
   contents: read
 
@@ -38,6 +36,7 @@ jobs:
     name: 校验 PR 标题规范
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    timeout-minutes: 5
     permissions:
       pull-requests: read
     steps:
@@ -60,12 +59,58 @@ jobs:
             revert
 
   # ----------------------------------------------------------------------------
-  # Job 2: 工具链安装、格式化检查、Clippy 分析与测试
+  # Job 2: 动态探测变更路径 (实现内部短路直通网关)
   # ----------------------------------------------------------------------------
-  test:
-    name: 格式化、Clippy 检查与测试 (Rust Stable)
+  detect-changes:
+    name: 探测变更路径
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code_changed: ${{ steps.filter.outputs.code_changed }}
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
+      - name: 分析改动文件类型
+        id: filter
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin ${{ github.base_ref }} --depth=1
+            CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD 2>/dev/null || true)
+          else
+            if git rev-parse HEAD~1 >/dev/null 2>&1; then
+              CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || true)
+            else
+              CHANGED_FILES="all"
+            fi
+          fi
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "code_changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          CORE_CHANGES=$(echo "$CHANGED_FILES" | grep -vE '^(\.gitignore|\.editorconfig|LICENSE|.*\.md|docs/.*)$' || true)
+          if [ -n "$CORE_CHANGES" ]; then
+            echo "检测到核心 Rust 源码/配置变更:"
+            echo "$CORE_CHANGES"
+            echo "code_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "仅检测到文档或说明文件变更，触发短路直通模式。"
+            echo "code_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ----------------------------------------------------------------------------
+  # Job 3: 代码格式化与 Clippy 静态检查
+  # ----------------------------------------------------------------------------
+  lint:
+    name: 规范与 Clippy 静态检查
+    runs-on: ubuntu-latest
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.code_changed != 'false'
+    timeout-minutes: 15
     steps:
       - name: 检出源码
         uses: actions/checkout@v4
@@ -73,17 +118,100 @@ jobs:
       - name: 安装 Rust 工具链
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: stable # 推荐最新稳定版本；如需特定版本可指定具体版本号 (如 1.80.0)
-          components: clippy, rustfmt
+          toolchain: stable
+          components: rustfmt, clippy
 
-      - name: 智能依赖与编译缓存 (rust-cache)
-        uses: swatinem/rust-cache@v2
+      - name: 配置 Rust 依赖与编译缓存
+        uses: Swatinem/rust-cache@v2
 
-      - name: 代码格式化检查 (rustfmt)
-        run: cargo fmt --check
+      - name: 校验代码格式与 Clippy 规范
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --all-targets --all-features -- -D warnings
 
-      - name: 静态代码分析与警告检查 (Clippy)
-        run: cargo clippy --all-targets --all-features -- -D warnings
+  # ----------------------------------------------------------------------------
+  # Job 4: 单元测试与集成测试
+  # ----------------------------------------------------------------------------
+  test:
+    name: 单元与集成测试 (Rust)
+    runs-on: ubuntu-latest
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.code_changed != 'false'
+    timeout-minutes: 20
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@v4
 
-      - name: 运行单元测试与集成测试
-        run: cargo test --all-targets --all-features
+      - name: 安装 Rust 工具链
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: 配置 Rust 依赖与编译缓存
+        uses: Swatinem/rust-cache@v2
+
+      - name: 执行 Cargo 单元测试
+        run: cargo test --verbose --all-targets --all-features
+
+  # ----------------------------------------------------------------------------
+  # Job 5: 质量门禁终审盖戳 (分支保护规则唯一指定强绑门禁)
+  # ----------------------------------------------------------------------------
+  all-checks-passed:
+    name: 质量门禁终审 (All Checks Passed)
+    runs-on: ubuntu-latest
+    needs: [detect-changes, validate-pr-title, lint, test]
+    if: always()
+    timeout-minutes: 5
+    steps:
+      - name: 汇总校验各任务执行结果
+        run: |
+          TITLE_RESULT="${{ needs.validate-pr-title.result }}"
+          DETECT_RESULT="${{ needs.detect-changes.result }}"
+          LINT_RESULT="${{ needs.lint.result }}"
+          TEST_RESULT="${{ needs.test.result }}"
+
+          echo "任务状态汇总: PR标题=[$TITLE_RESULT], 变更探测=[$DETECT_RESULT], 规范扫描=[$LINT_RESULT], 单元测试=[$TEST_RESULT]"
+
+          if [ "$TITLE_RESULT" = "failure" ] || [ "$TITLE_RESULT" = "cancelled" ]; then
+            echo "::error::PR 标题规范校验失败！请按照 Conventional Commits 规范修改 PR 标题。"
+            exit 1
+          fi
+
+          if [ "$DETECT_RESULT" = "failure" ] || [ "$DETECT_RESULT" = "cancelled" ]; then
+            echo "::error::变更路径探测任务异常中断！"
+            exit 1
+          fi
+
+          if [ "$LINT_RESULT" = "failure" ] || [ "$LINT_RESULT" = "cancelled" ]; then
+            echo "::error::Rustfmt 或 Clippy 静态检查失败！"
+            exit 1
+          fi
+
+          if [ "$TEST_RESULT" = "failure" ] || [ "$TEST_RESULT" = "cancelled" ]; then
+            echo "::error::Cargo 单元测试失败！门禁熔断阻断。"
+            exit 1
+          fi
+
+          echo "✅ 全部必要质量门禁已全部通过！"
+
+      - name: 生成门禁看板摘要报告
+        if: always()
+        run: |
+          {
+            echo "## 🚦 Rust CI 质量门禁终审报告"
+            echo ""
+            echo "| 检查项 | 判定状态 | 执行说明 |"
+            echo "| :--- | :---: | :--- |"
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              echo "| **PR 标题规范校验** | ${{ needs.validate-pr-title.result == 'success' && '✅ 通过' || '❌ 失败' }} | Conventional Commits 语义化规范 |"
+            fi
+            echo "| **变更路径探测** | ${{ needs.detect-changes.result == 'success' && '✅ 通过' || '❌ 异常' }} | 区分文档短路与核心代码构建 |"
+            if [ "${{ needs.detect-changes.outputs.code_changed }}" = "false" ]; then
+              echo "| **规范与单元测试** | ⚡ 短路直通 | 仅涉及文档改动，自动跳过耗时测试并放行 |"
+            else
+              echo "| **Clippy / Rustfmt** | ${{ needs.lint.result == 'success' && '✅ 通过' || '❌ 失败' }} | 代码风格与严苛静态检查 (-D warnings) |"
+              echo "| **Cargo 单元测试** | ${{ needs.test.result == 'success' && '✅ 通过' || '❌ 失败' }} | 全目标全特性回归验证 |"
+            fi
+            echo ""
+            echo "> 💡 **分支保护规则建议**：请在 GitHub 仓库设置中将 \`质量门禁终审 (All Checks Passed)\` 设为唯一 Required Status Check。"
+          } >> "$GITHUB_STEP_SUMMARY"

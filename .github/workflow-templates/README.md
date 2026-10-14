@@ -12,20 +12,20 @@
 
 ### 1. 语言生态专用流水线 (`languages/`)
 
-针对主流语言生态（Java / Node.js / Go / Python / Rust）封装开箱即用的完整流水线套件（每个语言严格保持完整的 4 文件自包含结构）：
+针对主流语言生态（Java / Node.js / Go / Python / Rust）封装工业级**二元标准模型（Dual-Workflow Standard）**流水线套件：每个语言严格保持 `ci.yml`（持续集成与质量门禁）与 `release.yml`（统合发版编排器）两大核心工作流，彻底杜绝多流并发竞争、重复测试与包抢发冲突。
 
-| 语言生态 | 目录 | 持续集成 (CI) | GitHub 发版与产物挂载 (Release) | 生态包发布 (Publish) | 容器镜像构建 (Docker) |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Java** | [`languages/java/`](./languages/java/) | [`ci.yml`](./languages/java/ci.yml): PR 门禁、Maven 构建、测试、Spotless 格式检查 | [`release.yml`](./languages/java/release.yml): 双通道发版、git-cliff 日志、JAR 产物与 Checksums 挂载 | [`publish.yml`](./languages/java/publish.yml): Sonatype Central Portal (Maven Central) 发布 | [`docker.yml`](./languages/java/docker.yml): Spring Boot 多架构 Docker 镜像构建 (GHCR) |
-| **Node.js** | [`languages/node/`](./languages/node/) | [`ci.yml`](./languages/node/ci.yml): PR 门禁、pnpm 缓存、TS 编译、ESLint、Vitest | [`release.yml`](./languages/node/release.yml): 双通道发版、git-cliff 日志、离线 TGZ 包与 Checksums 挂载 | [`publish.yml`](./languages/node/publish.yml): npm 官方仓库发布 (Trusted Publishing / Token) | [`docker.yml`](./languages/node/docker.yml): 前端 / Node 应用容器镜像构建 (GHCR) |
-| **Go** | [`languages/go/`](./languages/go/) | [`ci.yml`](./languages/go/ci.yml): PR 门禁、依赖缓存、golangci-lint、竞态测试 | [`release.yml`](./languages/go/release.yml): 双通道发版、git-cliff 日志、二进制产物与 Checksums 挂载 | [`publish.yml`](./languages/go/publish.yml): GoReleaser 全平台二进制交叉编译与分发 | [`docker.yml`](./languages/go/docker.yml): 轻量化多架构 Docker 镜像构建 (GHCR) |
-| **Python** | [`languages/python/`](./languages/python/) | [`ci.yml`](./languages/python/ci.yml): PR 门禁、pip 缓存、Ruff 代码检查、pytest 测试 | [`release.yml`](./languages/python/release.yml): 双通道发版、git-cliff 日志、sdist/wheel 与 Checksums 挂载 | [`publish.yml`](./languages/python/publish.yml): PyPI 官方包发布 (Trusted Publishing OIDC) | [`docker.yml`](./languages/python/docker.yml): 容器化应用打包与发布 (GHCR) |
-| **Rust** | [`languages/rust/`](./languages/rust/) | [`ci.yml`](./languages/rust/ci.yml): PR 门禁、rust-cache 缓存、Clippy 扫描、fmt | [`release.yml`](./languages/rust/release.yml): 双通道发版、git-cliff 日志、Release 二进制与 Checksums 挂载 | [`publish.yml`](./languages/rust/publish.yml): Crates.io 官方发布与预编译二进制附件挂载 | [`docker.yml`](./languages/rust/docker.yml): 极简多架构 Docker 镜像构建 (GHCR) |
+| 语言生态 | 目录 | 持续集成质量门禁 (CI) | 统合发版编排流水线 (Unified Release) |
+| :--- | :--- | :--- | :--- |
+| **Java** | [`languages/java/`](./languages/java/) | [`ci.yml`](./languages/java/ci.yml): PR 门禁、动态路径短路、Java LTS (17/21) 兼容性矩阵测试、终审看板 | [`release.yml`](./languages/java/release.yml): 单次构建、JAR 与 Checksums、GitHub Release、Maven Central 发布 (GPG)、Spring Boot 多架构 Docker (GHCR) |
+| **Node.js** | [`languages/node/`](./languages/node/) | [`ci.yml`](./languages/node/ci.yml): PR 门禁、动态路径短路、Node.js (18/20/22) 兼容性矩阵、ESLint/Typecheck、终审看板 | [`release.yml`](./languages/node/release.yml): 单次打包 (pnpm pack)、TGZ 与 Checksums、GitHub Release、npm 官方发布 (OIDC)、Node.js 多架构 Docker (GHCR) |
+| **Go** | [`languages/go/`](./languages/go/) | [`ci.yml`](./languages/go/ci.yml): PR 门禁、动态路径短路、golangci-lint 扫描、跨版本数据竞态测试 (-race)、终审看板 | [`release.yml`](./languages/go/release.yml): 交叉编译全平台二进制、Checksums、GitHub Release、Go 多架构 Docker (GHCR) |
+| **Python** | [`languages/python/`](./languages/python/) | [`ci.yml`](./languages/python/ci.yml): PR 门禁、动态路径短路、Ruff 规范检查、pytest 跨版本 (3.10~3.12) 测试矩阵、终审看板 | [`release.yml`](./languages/python/release.yml): 单次构建 (sdist/wheel)、Checksums、GitHub Release、PyPI 官方发布 (OIDC)、Python 多架构 Docker (GHCR) |
+| **Rust** | [`languages/rust/`](./languages/rust/) | [`ci.yml`](./languages/rust/ci.yml): PR 门禁、动态路径短路、Clippy 严苛扫描 (-D warnings)、rustfmt、Cargo 单元测试、终审看板 | [`release.yml`](./languages/rust/release.yml): 生产级二进制编译、Checksums、GitHub Release、Crates.io 官方发布、Rust 多架构 Docker (GHCR) |
 
-> [!TIP] **多架构容器镜像流水线 (`docker.yml`) 核心设计规范**：
-> - **双主干快照持续交付**：原生兼容 `main` 与 `master` 双主干，日常合并自动构建并推送带有 `:latest` 与 `:sha-<short>` 的多架构镜像，满足下游联调与持续交付需求；
-> - **Git 原生拓扑防双跑门禁**：无论采用单分支（Trunk-Based）还是多分支（Git Flow）模式，发版时主干更新与版本 Tag 往往同时推送到远端。分支流水线在检出后通过 `git tag --points-at HEAD 'v*'` 智能感知关联标签，自动退出后续重型步骤，由 Tag 流水线独占发布 SemVer 镜像，彻底杜绝计算浪费与 GHCR 标签并发竞争；
-> - **生产级纯净性与构建加速**：QEMU 模拟器 + Docker Buildx 交叉编译 `linux/amd64` 与 `linux/arm64` 双架构镜像；注入 `provenance: false` 与 `sbom: false`，杜绝私有镜像仓库（如 Harbor）出现 `unknown/unknown` 幽灵标签；开箱即用集成 GHA 缓存并预置 Docker Hub 双发布扩展插槽。
+> [!TIP] **统合发版编排器 (`release.yml`) 核心设计优势**：
+> - **Build Once, Distribute Everywhere**：全流程先执行发版前置门禁测试（测试未过绝对熔断阻断），随后执行单次编译打包并生成 SHA-256 校验和清单，产物上传为不可变 Artifact；下游的 GitHub Release、包管理器（PyPI/npm等）与 Docker 镜像构建**全部复用同一份制品**，彻底消灭算力重复浪费与产物哈希漂移；
+> - **零外部 Token 安全流**：无需配置高危个人访问令牌（PAT），全链路依托 GitHub Actions 原生短效 `GITHUB_TOKEN` 与现代免密 OIDC (Trusted Publishing) 自动流转；
+> - **标签防污染策略**：严控 Docker 镜像标签，仅在正式语义化 Tag（非 pre-release）发版时打上 `:latest`，保护生产环境不受开发快照污染。
 
 ---
 
@@ -51,16 +51,14 @@
 当你在具体项目中需要启用流水线时，只需将对应模版拷贝至 `.github/workflows/`：
 
 > [!NOTE] **关于覆盖根目录已有工作流**：
-> 根目录 `.github/workflows/` 下默认提供了通用轻量底座（如通用 ShellCheck 门禁与通用 git-cliff 发版底座）。
-> 若要启用各语言专属的深度能力（如单测执行、发行包编译与 Release 产物附件自动挂载），直接将语言专属模版（`ci.yml`、`release.yml` 等）**覆盖复制**至 `.github/workflows/` 即可。
+> 根目录 `.github/workflows/` 下默认提供了通用轻量底座（通用 ShellCheck 门禁与通用 git-cliff 发版底座）。
+> 若要启用各语言专属的深度能力（单测执行、发行包编译与全自动化发版），直接将语言专属模版（`ci.yml` 与 `release.yml`）**覆盖复制**至 `.github/workflows/` 即可。
 
-### 示例 1：开箱即用后端微服务（Java 完整四件套 + VPS 部署）
+### 示例 1：后端微服务（Java 完整套件 + VPS 部署）
 ```bash
-# 1. 拷贝 Java 专属完整套件 (CI、GitHub Release、Maven Central 发布、Docker 构建)
+# 1. 拷贝 Java 专属完整套件 (CI 质量门禁 + 统合发版编排器)
 cp .github/workflow-templates/languages/java/ci.yml .github/workflows/ci.yml
 cp .github/workflow-templates/languages/java/release.yml .github/workflows/release.yml
-cp .github/workflow-templates/languages/java/publish.yml .github/workflows/publish.yml
-cp .github/workflow-templates/languages/java/docker.yml .github/workflows/docker.yml
 
 # 2. 拷贝生产部署流水线
 cp .github/workflow-templates/deployments/deploy-ssh-docker-compose.yml .github/workflows/deploy-prod.yml
@@ -68,7 +66,7 @@ cp .github/workflow-templates/deployments/deploy-ssh-docker-compose.yml .github/
 
 ### 示例 2：全栈前端应用 / 文档站点（Node.js CI + GitHub Pages 部署）
 ```bash
-# 1. 拷贝 CI 门禁与 GitHub Release 发版
+# 1. 拷贝 CI 门禁与统合发版
 cp .github/workflow-templates/languages/node/ci.yml .github/workflows/ci.yml
 cp .github/workflow-templates/languages/node/release.yml .github/workflows/release.yml
 
@@ -76,10 +74,11 @@ cp .github/workflow-templates/languages/node/release.yml .github/workflows/relea
 cp .github/workflow-templates/deployments/deploy-github-pages.yml .github/workflows/deploy-pages.yml
 ```
 
-### 示例 3：开源 SDK / 库发布（以 Python / npm 发布为例）
+### 示例 3：开源 Python SDK / CLI / MCP Server 发布
 ```bash
-# 拷贝官方包仓库自动发布流水线 (打 Tag 时与根目录 release.yml 自动协同)
-cp .github/workflow-templates/languages/python/publish.yml .github/workflows/publish.yml
+# 拷贝 Python 二元流水线套件 (CI 质量门禁 + PyPI / Release / Docker 统合发版)
+cp .github/workflow-templates/languages/python/ci.yml .github/workflows/ci.yml
+cp .github/workflow-templates/languages/python/release.yml .github/workflows/release.yml
 ```
 
 ---

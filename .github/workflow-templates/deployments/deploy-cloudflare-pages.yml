@@ -9,10 +9,9 @@
 #   - CLOUDFLARE_ACCOUNT_ID: Cloudflare 账户 ID (必填 Secret)
 #   - CLOUDFLARE_PROJECT_NAME: Cloudflare Pages 项目名称 (可选 Var，默认 my-pages-project)
 # 核心特性：
+#   - 智能路径过滤：忽略非代码类纯文档改动
 #   - 使用官方 cloudflare/wrangler-action@v3 执行秒级极速全球边缘同步
-#   - 产物目录默认为 dist，如需其它目录 (如 build/public) 可直接修改命令参数
-#   - 部署完成后自动回传全局访问 URL 并绑定至 GitHub Environment
-#   - 内置线上服务健康探测与冒烟测试 (Smoke Test)
+#   - 部署完成后自动回传全局访问 URL 并绑定至 GitHub Environment 与 Step Summary 看板
 # ==============================================================================
 
 name: Deploy - Cloudflare Pages
@@ -20,6 +19,12 @@ name: Deploy - Cloudflare Pages
 on:
   push:
     branches: [main, master]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - '.editorconfig'
   workflow_dispatch:
 
 # 并发控制：生产部署单例排队执行，严禁取消
@@ -34,6 +39,7 @@ jobs:
   deploy-cloudflare:
     name: 构建并部署至 Cloudflare Pages 全球网络
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment:
       name: production
       url: ${{ steps.publish.outputs.deployment-url }}
@@ -63,18 +69,28 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=${{ vars.CLOUDFLARE_PROJECT_NAME || 'my-pages-project' }} --branch=${{ github.ref_name }}
+          command: pages deploy dist --project-name=${{ vars.CLOUDFLARE_PROJECT_NAME || 'my-pages-project' }}
 
       - name: 生产环境健康检查与冒烟测试 (Smoke Test)
         run: |
-          DEPLOYED_URL="${{ steps.publish.outputs.deployment-url }}"
-          HEALTH_URL="${{ vars.APP_HEALTH_CHECK_URL || '' }}"
-          TARGET_URL="${HEALTH_URL:-$DEPLOYED_URL}"
-
-          if [ -z "$TARGET_URL" ] || [[ "$TARGET_URL" == *"your-domain.com"* ]]; then
-            echo "::warning::未检测到有效探测地址，跳过冒烟测试。"
-          else
-            echo "正在对 Cloudflare Pages 地址执行健康冒烟探测: $TARGET_URL ..."
-            curl --fail --retry 5 --retry-delay 5 --max-time 10 "$TARGET_URL"
-            echo "✅ 边缘节点发布就绪，冒烟探测通过！"
+          DEPLOY_URL="${{ steps.publish.outputs.deployment-url }}"
+          if [ -n "$DEPLOY_URL" ]; then
+            echo "正在对 Cloudflare 边缘部署地址执行健康冒烟探测: $DEPLOY_URL ..."
+            curl --fail --retry 5 --retry-delay 5 --max-time 10 "$DEPLOY_URL"
+            echo "✅ 线上服务健康检查通过！"
           fi
+
+      - name: 输出部署看板摘要
+        if: always()
+        run: |
+          {
+            echo "## ⚡ Cloudflare Pages 部署看板"
+            echo ""
+            echo "| 属性 | 配置值 |"
+            echo "| :--- | :--- |"
+            echo "| **线上访问地址** | [${{ steps.publish.outputs.deployment-url }}](${{ steps.publish.outputs.deployment-url }}) |"
+            echo "| **项目名称** | \`${{ vars.CLOUDFLARE_PROJECT_NAME || 'my-pages-project' }}\` |"
+            echo "| **触发方式** | \`${{ github.event_name }}\` |"
+            echo ""
+            echo "✅ Cloudflare Pages 全球边缘 CDN 发布完成！"
+          } >> "$GITHUB_STEP_SUMMARY"

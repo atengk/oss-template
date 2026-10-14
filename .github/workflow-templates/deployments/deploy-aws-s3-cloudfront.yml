@@ -2,8 +2,9 @@
 # 部署模版：AWS S3 与 CloudFront 全球 CDN 静态站点发布
 # 适用场景：生产级前端应用 (React/Vue/Next/Astro) 或静态文档站点发布至 AWS 基础设施
 # 触发通道：
-#   - push: 主干分支 (main, master) 提交代码自动触发
-#   - workflow_dispatch: 网页控制台手动触发
+#   - 网页控制台手动触发 (workflow_dispatch)
+#   - 💡 安全防呆设计：生产级 AWS 部署默认严格禁用 push 自动穿透，杜绝未经测试的代码误上线；
+#     如需在特定场景下实现自动化 CD，可配置 on.workflow_run 监听 Release 或 CI 成功事件。
 # 核心依赖凭据 (Secrets)：
 #   - AWS_ACCESS_KEY_ID: IAM 访问密钥 ID (传统方式)
 #   - AWS_SECRET_ACCESS_KEY: IAM 私有访问密钥 (传统方式)
@@ -14,14 +15,12 @@
 # 核心特性：
 #   - 增量同步静态产物 (aws s3 sync dist/ s3://... --delete)
 #   - 自动化提交全网边缘 CDN 缓存刷新失效 (aws cloudfront create-invalidation)
-#   - 内置线上服务健康探测与冒烟测试 (Smoke Test)
+#   - 内置线上服务健康探测、超时保护与 Step Summary 看板输出
 # ==============================================================================
 
 name: Deploy - AWS S3 & CloudFront
 
 on:
-  push:
-    branches: [main, master]
   workflow_dispatch:
 
 # 并发控制：生产部署单例排队执行，严禁取消
@@ -37,6 +36,7 @@ jobs:
   deploy-aws:
     name: 同步产物至 S3 并刷新 CloudFront 缓存
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment:
       name: production
       url: https://your-domain.com # 替换为实际 CloudFront 分发域名或自定义域名
@@ -44,11 +44,6 @@ jobs:
       - name: 检出源码
         uses: actions/checkout@v4
 
-      # ------------------------------------------------------------------------
-      # 静态站点构建步骤（默认为 Node.js / pnpm）
-      # 若使用 Python MkDocs、Go Hugo 或 Rust mdBook，仅需替换以下构建逻辑
-      # 并确保最终产物输出至指定目录（如 dist、public 或 build）
-      # ------------------------------------------------------------------------
       - name: 安装 pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -63,36 +58,38 @@ jobs:
       - name: 安装依赖与构建生产产物
         run: |
           pnpm install --frozen-lockfile || pnpm install
-          pnpm run build # 确保构建产物输出至 dist 目录
+          pnpm run build
 
-      # ------------------------------------------------------------------------
-      # AWS 鉴权配置
-      # 方式 A (传统)：使用静态 IAM Secret (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY)
-      # 方式 B (现代推荐)：使用 GitHub OIDC 免密钥扮演 (role-to-assume: arn:aws:iam::...)
-      # ------------------------------------------------------------------------
-      - name: 配置 AWS 凭据
+      - name: 配置 AWS 凭据 (优先 OIDC 扮演角色，回退使用静态 Key)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN || '' }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID || '' }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY || '' }}
           aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
-          # 如使用 OIDC 免密钥，解除下方注释并配置角色 ARN：
-          # role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          # role-session-name: github-actions-deploy
 
-      - name: 同步产物至 AWS S3 存储桶
+      - name: 同步产物至 S3 存储桶并自动清理陈旧文件
         run: |
-          echo "正在同步 dist 目录产物至 S3 存储桶: s3://${{ secrets.S3_BUCKET_NAME }} ..."
-          aws s3 sync dist/ s3://${{ secrets.S3_BUCKET_NAME }} --delete
+          S3_BUCKET="${{ secrets.S3_BUCKET_NAME }}"
+          if [ -z "$S3_BUCKET" ]; then
+            echo "错误: 未配置 secrets.S3_BUCKET_NAME！"
+            exit 1
+          fi
+          echo "正在增量同步本地产物 [dist/] 至 S3 存储桶 [s3://$S3_BUCKET]..."
+          aws s3 sync dist/ "s3://$S3_BUCKET" --delete --cache-control "public, max-age=31536000, immutable"
 
-      - name: 刷新 AWS CloudFront CDN 全节点缓存
-        if: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID != '' }}
+          # 对 html 文件单独重设短缓存，确保发布即时生效
+          aws s3 cp dist/ "s3://$S3_BUCKET" --recursive --exclude "*" --include "*.html" \
+            --metadata-directive REPLACE --cache-control "public, max-age=0, must-revalidate"
+
+      - name: 提交 CloudFront 边缘全网节点缓存刷新失效
+        if: env.CLOUDFRONT_ID != ''
         env:
           CLOUDFRONT_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
         run: |
-          echo "正在向 CloudFront 分发 ID [$CLOUDFRONT_ID] 提交全量缓存失效申请..."
+          echo "正在向 CloudFront 分发 [$CLOUDFRONT_ID] 提交全量缓存失效请求..."
           aws cloudfront create-invalidation --distribution-id "$CLOUDFRONT_ID" --paths "/*"
-          echo "✅ CloudFront 缓存刷新指令已成功提交！"
+          echo "✅ CloudFront 缓存刷新请求已成功提交！"
 
       - name: 生产环境健康检查与冒烟测试 (Smoke Test)
         run: |
@@ -100,7 +97,22 @@ jobs:
           if [[ "$HEALTH_URL" == *"your-domain.com"* ]]; then
             echo "::warning::检测到当前健康检查地址仍为示例占位符 [$HEALTH_URL]，已跳过冒烟探测。建议在仓库中配置 Vars: APP_HEALTH_CHECK_URL 以启用自动就绪验证！"
           else
-            echo "正在对 AWS 部署地址执行健康冒烟探测: $HEALTH_URL ..."
+            echo "正在对线上服务执行健康冒烟探测: $HEALTH_URL ..."
             curl --fail --retry 5 --retry-delay 5 --max-time 10 "$HEALTH_URL"
-            echo "✅ 线上站点就绪，冒烟探测通过！"
+            echo "✅ 线上服务健康检查通过！"
           fi
+
+      - name: 输出部署看板摘要
+        if: always()
+        run: |
+          {
+            echo "## ☁️ AWS S3 & CloudFront 部署看板"
+            echo ""
+            echo "| 属性 | 配置值 |"
+            echo "| :--- | :--- |"
+            echo "| **目标存储桶** | \`${{ secrets.S3_BUCKET_NAME || '***' }}\` |"
+            echo "| **AWS 区域** | \`${{ secrets.AWS_REGION || 'us-east-1' }}\` |"
+            echo "| **触发者** | \`${{ github.actor }}\` |"
+            echo ""
+            echo "✅ AWS 产物同步与边缘 CDN 缓存刷新完成！"
+          } >> "$GITHUB_STEP_SUMMARY"

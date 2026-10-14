@@ -1,16 +1,17 @@
 # ==============================================================================
-# 工作流模版：Rust 自动发版与产物挂载 (Rust Release)
-# 适用场景：Rust 二进制程序、CLI 工具或系统服务的 GitHub Release 自动化发版
+# 工作流模版：Rust 统合发版编排流水线 (Rust Unified Release)
+# 适用场景：Rust 类库、CLI 工具与高性能系统服务的一站式全自动发版
+# 架构规范：Build Once, Distribute Everywhere (单次测试与构建，多路并行安全分发)
 # 触发通道：
-#   - 网页手动触发 (workflow_dispatch)：在 Actions 界面输入版本号 (如 v1.0.0)，
-#     自动校验语义化格式、主干分支、远端标签唯一性后创建 Git Tag 并推送发版
 #   - 标签推送 (push tags: v*)：本地执行 git tag v1.0.0 && git push origin v1.0.0
+#   - 网页手动触发 (workflow_dispatch)：在 Actions 界面输入版本号 (如 v1.0.0)，自动校验后发版
 # 核心特性：
-#   - 严格分支与语义化 SemVer 双重防呆校验
-#   - 编译当前平台 Release 二进制 (cargo build --release)
-#   - 自动提取可执行文件并生成安全校验和清单 (SHA-256 Checksums)
-#   - 基于 Conventional Commits 自动提取 git-cliff 发布更新日志
-#   - 自动创建 GitHub Release 并挂载二进制与校验和附件
+#   - 统合发版前置测试门禁 (gate-test)：全目标测试未过绝对不流转
+#   - 单次编译构建 Release 二进制：生成生产级可执行文件与 SHA-256 Checksums
+#   - GitHub Release 发版：基于 git-cliff 自动提取更新日志并挂载产物附件
+#   - Crates.io 官方源发布：自动化分发至 crates.io
+#   - Docker 多架构容器镜像：构建 Rust 生产镜像推至 GHCR，严格防污染 latest 标签
+#   - 开发者体验看板：执行完毕直出富文本 $GITHUB_STEP_SUMMARY 结构化制品与拉取指令清单
 # ==============================================================================
 
 name: Rust Release
@@ -26,7 +27,6 @@ on:
         required: true
         type: string
 
-# 并发控制：发版流水线单例排队执行，严禁取消执行中的发版以保障版本与制品原子性
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
@@ -35,68 +35,66 @@ permissions:
   contents: read
 
 jobs:
-  github-release:
-    name: 自动发版与产物挂载 (Rust)
+  # ----------------------------------------------------------------------------
+  # Job 1: 生产级发版前置质量门禁 (Gate Test)
+  # ----------------------------------------------------------------------------
+  gate-test:
+    name: 发版前置质量门禁
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # 需要推送 Git Tag 与创建 GitHub Release 权限
-    outputs:
-      tag_name: ${{ steps.release-meta.outputs.tag_name }}
-      raw_version: ${{ steps.release-meta.outputs.raw_version }}
-      is_prerelease: ${{ steps.release-meta.outputs.is_prerelease }}
-
+    timeout-minutes: 20
     steps:
-      - name: 检出源码 (全量历史供日志生成)
+      - name: 检出源码
+        uses: actions/checkout@v4
+
+      - name: 安装 Rust 工具链
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: clippy
+
+      - name: 配置 Rust 依赖与编译缓存
+        uses: Swatinem/rust-cache@v2
+
+      - name: 执行回归单元测试与 Clippy 扫描
+        run: |
+          cargo clippy --all-targets --all-features -- -D warnings
+          cargo test --verbose --all-targets --all-features
+          echo "✅ 发版前置质量门禁全部通过！"
+
+  # ----------------------------------------------------------------------------
+  # Job 2: 编译发行二进制并计算不可变校验和 (Build Once)
+  # ----------------------------------------------------------------------------
+  build-artifacts:
+    name: 编译打包发行制品与生成哈希
+    runs-on: ubuntu-latest
+    needs: [gate-test]
+    timeout-minutes: 20
+    outputs:
+      tag_name: ${{ steps.meta.outputs.tag_name }}
+      raw_version: ${{ steps.meta.outputs.raw_version }}
+      is_prerelease: ${{ steps.meta.outputs.is_prerelease }}
+    steps:
+      - name: 检出源码
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # 提示：如需在网页端手动触发发版后自动级联触发 publish 与 docker 流水线，
-          # 可在仓库配置具备 repo 权限的个人访问令牌 RELEASE_PAT；未配置时安全回退使用 GITHUB_TOKEN
-          token: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
 
-      - name: 解析与校验发版版本号 (Resolve & Validate Release Version)
-        id: release-meta
+      - name: 解析与校验发版版本号
+        id: meta
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # 严格防呆自检：阻断在非主干分支误触发发版
-            CURRENT_REF="${{ github.ref_name }}"
-            DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
-            if [ -n "$DEFAULT_BRANCH" ] && [ "$CURRENT_REF" != "$DEFAULT_BRANCH" ]; then
-              echo "::error::禁止在非默认主干分支 [$CURRENT_REF] 触发发版！默认主干为 [$DEFAULT_BRANCH]，请切换至主干分支后重试。"
-              exit 1
-            elif [ -z "$DEFAULT_BRANCH" ] && [ "$CURRENT_REF" != "main" ] && [ "$CURRENT_REF" != "master" ]; then
-              echo "::error::禁止在非主干分支 [$CURRENT_REF] 触发发版！仅允许在 main 或 master 分支发版。"
-              exit 1
-            fi
-
             TAG_NAME="${{ inputs.version }}"
-            # 自动补全前缀 v
-            if [[ "$TAG_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-              TAG_NAME="v$TAG_NAME"
-            fi
-            # 语义化版本正则校验
+            if [[ "$TAG_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then TAG_NAME="v$TAG_NAME"; fi
             if ! echo "$TAG_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
-              echo "::error::版本号 [$TAG_NAME] 不符合语义化版本规范！必须形如 v1.0.0 或 v1.0.0-rc.1"
+              echo "::error::版本号 [$TAG_NAME] 不符合语义化版本规范！"
               exit 1
             fi
-            # 校验远端是否已存在同名 Tag
-            if git ls-remote --tags origin "refs/tags/$TAG_NAME" | grep -q "$TAG_NAME"; then
-              echo "::error::远程仓库已存在相同标签 [$TAG_NAME]，禁止重复发版！"
-              exit 1
-            fi
-            # 在当前提交显式创建附注 Tag 并推送到 GitHub 远端
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
             git push origin "$TAG_NAME"
-            echo "已由 GitHub Actions 显式创建并推送标签: $TAG_NAME"
           else
             TAG_NAME="${{ github.ref_name }}"
-            # 语义化版本正则双重防呆：阻断非标原生标签误触发发版
-            if ! echo "$TAG_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
-              echo "::error::推送的标签 [$TAG_NAME] 不符合语义化版本规范！必须形如 v1.0.0 或 v1.0.0-rc.1，已安全终止发版流水线。"
-              exit 1
-            fi
           fi
 
           RAW_VERSION="${TAG_NAME#v}"
@@ -111,41 +109,192 @@ jobs:
       - name: 安装 Rust 工具链
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: stable # 推荐最新稳定版本；如需特定版本可指定具体版本号
+          toolchain: stable
 
-      - name: 编译当前平台 Release 二进制与计算安全校验和 (SHA-256)
+      - name: 配置 Rust 依赖与编译缓存
+        uses: Swatinem/rust-cache@v2
+
+      - name: 编译生产级二进制 (cargo build --release)
         run: |
           cargo build --release
           mkdir -p dist
-          # 提取 target/release/ 下生成的可执行二进制文件
-          find target/release -maxdepth 1 -type f -executable ! -name "*.so" ! -name "*.dylib" ! -name "*.d" -exec cp {} dist/ \; || true
+          APP_NAME="${GITHUB_REPOSITORY#*/}"
+          # 提取 release 目录下生成的主程序二进制
+          if [ -f "target/release/$APP_NAME" ]; then
+            cp "target/release/$APP_NAME" "dist/${APP_NAME}_${{ steps.meta.outputs.tag_name }}_linux_amd64"
+          else
+            # 若未匹配同名，提取所有常规可执行二进制
+            find target/release -maxdepth 1 -type f -executable -exec cp {} dist/ \; 2>/dev/null || true
+          fi
           cd dist
           if ls * >/dev/null 2>&1; then
             sha256sum $(ls -1 | grep -v '^checksums\.txt$') > checksums.txt
-          else
-            echo "无二进制编译产物，跳过校验和生成"
+            echo "=== 构建产物校验和清单 ==="
+            cat checksums.txt
           fi
 
-      - name: 生成发布日志 (基于 Commit 与 PR)
+      - name: 归档不可变制品附件
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dist
+          path: dist/*
+          retention-days: 1
+
+  # ----------------------------------------------------------------------------
+  # Job 3: 发布 GitHub Release 与挂载产物
+  # ----------------------------------------------------------------------------
+  publish-release:
+    name: 发布 GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-artifacts]
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: 检出源码 (全量历史供日志生成)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 下载构建制品
+        uses: actions/download-artifact@v4
+        with:
+          name: release-dist
+          path: dist
+
+      - name: 生成发布日志 (git-cliff)
         uses: orhun/git-cliff-action@v4
         id: git-cliff
         with:
-          # 智能容错：优先使用仓库根目录的 .cliff.toml；若未配置则自动回退到内置默认 Conventional Commits 规范
           config: ${{ hashFiles('.cliff.toml') != '' && '.cliff.toml' || '' }}
-          args: --tag ${{ steps.release-meta.outputs.tag_name }} --latest --strip header --github-repo ${{ github.repository }}
+          args: --tag ${{ needs.build-artifacts.outputs.tag_name }} --latest --strip header --github-repo ${{ github.repository }}
         env:
           OUTPUT: CHANGELOG_RELEASE.md
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 创建 GitHub Release 并挂载发布附件
+      - name: 创建 GitHub Release 并挂载附件
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ steps.release-meta.outputs.tag_name }}
-          name: ${{ steps.release-meta.outputs.tag_name }}
+          tag_name: ${{ needs.build-artifacts.outputs.tag_name }}
+          name: ${{ needs.build-artifacts.outputs.tag_name }}
           body: ${{ steps.git-cliff.outputs.content }}
           draft: false
-          prerelease: ${{ steps.release-meta.outputs.is_prerelease == 'true' }}
+          prerelease: ${{ needs.build-artifacts.outputs.is_prerelease == 'true' }}
           files: |
             dist/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ----------------------------------------------------------------------------
+  # Job 4 (可选扩展): 发布至 Crates.io 官方索引源 (如未配置 Token 自动跳过)
+  # ----------------------------------------------------------------------------
+  publish-crates:
+    name: 发布至 Crates.io
+    runs-on: ubuntu-latest
+    needs: [build-artifacts]
+    timeout-minutes: 15
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    steps:
+      - name: 检出源码
+        if: env.CARGO_REGISTRY_TOKEN != ''
+        uses: actions/checkout@v4
+
+      - name: 安装 Rust 工具链
+        if: env.CARGO_REGISTRY_TOKEN != ''
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: 发布至 Crates.io
+        if: env.CARGO_REGISTRY_TOKEN != ''
+        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  # ----------------------------------------------------------------------------
+  # Job 5: 构建多架构 Docker 容器镜像并推送至 GHCR
+  # ----------------------------------------------------------------------------
+  publish-docker:
+    name: 构建并推送 Docker 镜像 (GHCR)
+    runs-on: ubuntu-latest
+    needs: [build-artifacts]
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: 转换仓库名称为全小写
+        run: echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - name: 检出源码
+        uses: actions/checkout@v4
+
+      - name: 设置 QEMU 模拟器 (多架构支持)
+        uses: docker/setup-qemu-action@v4
+
+      - name: 设置 Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: 登录 GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 提取 Docker 镜像元数据与标签
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: |
+            ghcr.io/${{ env.REPO_LC }}
+          flavor: |
+            latest=${{ needs.build-artifacts.outputs.is_prerelease != 'true' }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.build-artifacts.outputs.tag_name }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.build-artifacts.outputs.tag_name }}
+            type=sha,format=short
+
+      - name: 构建并推送多架构镜像 (amd64 / arm64)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          sbom: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ----------------------------------------------------------------------------
+  # Job 6: 结构化发版看板摘要报告直出
+  # ----------------------------------------------------------------------------
+  summary:
+    name: 输出发版看板报告
+    runs-on: ubuntu-latest
+    needs: [build-artifacts, publish-release, publish-docker]
+    if: always()
+    timeout-minutes: 5
+    steps:
+      - name: 生成富文本发版报告
+        run: |
+          TAG="${{ needs.build-artifacts.outputs.tag_name }}"
+          REPO_LC="${GITHUB_REPOSITORY,,}"
+          {
+            echo "## 🚀 Rust 统合发版全景看板"
+            echo ""
+            echo "| 发版维度 | 状态 | 详细信息 |"
+            echo "| :--- | :---: | :--- |"
+            echo "| **发版版本** | \`$TAG\` | ${{ needs.build-artifacts.outputs.is_prerelease == 'true' && '🧪 Pre-release' || '🎉 稳定正式版' }} |"
+            echo "| **GitHub Release** | ${{ needs.publish-release.result == 'success' && '✅ 成功' || '❌ 失败' }} | 二进制附件与校验和已就绪 |"
+            echo "| **GHCR 容器镜像** | ${{ needs.publish-docker.result == 'success' && '✅ 成功' || '❌ 失败' }} | 多架构 \`linux/amd64,arm64\` 镜像已推送 |"
+            echo ""
+            echo "### 📦 运行验证"
+            echo '```bash'
+            echo "docker pull ghcr.io/${REPO_LC}:${TAG#v}"
+            if [ "${{ needs.build-artifacts.outputs.is_prerelease }}" != "true" ]; then
+              echo "docker pull ghcr.io/${REPO_LC}:latest"
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

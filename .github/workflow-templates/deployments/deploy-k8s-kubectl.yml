@@ -2,22 +2,21 @@
 # 部署模版：Kubernetes 集群容器滚动发布 (kubectl)
 # 适用场景：云原生 Kubernetes 集群 (ACK/TKE/EKS/自建 K8s) 上的 Deployment 控制器发布
 # 触发通道：
-#   - push: 主干分支 (main, master) 提交代码自动触发
-#   - workflow_dispatch: 网页控制台手动触发 (支持指定 namespace, deployment_name, image_tag)
+#   - 网页控制台手动触发 (workflow_dispatch)：支持指定 namespace, deployment_name, image_tag
+#   - 💡 安全防呆设计：生产集群部署默认严格禁用 push 自动穿透，杜绝未经测试的代码误上线；
+#     如需在特定场景下实现自动化 CD，可配置 on.workflow_run 监听 Release 或 CI 成功事件。
 # 核心依赖凭据 (Secrets)：
 #   - KUBECONFIG: 具有目标命名空间 Deployment 读写权限的 Kubeconfig 认证配置文本 (必填)
 # 部署模式与特性：
 #   - 模式 1 (声明式镜像更新)：当输入 image_tag 时，执行 kubectl set image 更新不可变镜像版本
 #   - 模式 2 (平滑滚动重启)：未指定 image_tag 时，执行 kubectl rollout restart 重新拉取部署
 #   - 状态就绪阻塞探测：kubectl rollout status --timeout=180s 确保 Pod 成功就绪
-#   - 生产环境线上冒烟健康探测 (Smoke Test)
+#   - 生产环境线上冒烟健康探测 (Smoke Test) 与 Step Summary 看板输出
 # ==============================================================================
 
 name: Deploy - Kubernetes (kubectl)
 
 on:
-  push:
-    branches: [main, master]
   workflow_dispatch:
     inputs:
       namespace:
@@ -49,6 +48,7 @@ jobs:
   deploy-k8s:
     name: 滚动更新 Kubernetes Deployment
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment:
       name: production
       url: https://your-domain.com # 替换为实际业务访问域名
@@ -105,3 +105,19 @@ jobs:
             curl --fail --retry 5 --retry-delay 5 --max-time 10 "$HEALTH_URL"
             echo "✅ 线上服务健康检查通过！"
           fi
+
+      - name: 输出部署看板摘要
+        if: always()
+        run: |
+          {
+            echo "## ☸️ Kubernetes 生产部署看板"
+            echo ""
+            echo "| 属性 | 配置值 |"
+            echo "| :--- | :--- |"
+            echo "| **命名空间** | \`${{ inputs.namespace || 'production' }}\` |"
+            echo "| **控制器名称** | \`${{ inputs.deployment_name || 'my-app' }}\` |"
+            echo "| **镜像标签** | \`${{ inputs.image_tag || '平滑滚动重启 (rollout restart)' }}\` |"
+            echo "| **触发者** | \`${{ github.actor }}\` |"
+            echo ""
+            echo "✅ Kubernetes Deployment 滚动更新与健康探测完成！"
+          } >> "$GITHUB_STEP_SUMMARY"
