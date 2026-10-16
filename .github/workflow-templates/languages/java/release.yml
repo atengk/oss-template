@@ -90,10 +90,25 @@ jobs:
         id: meta
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # 严格防呆自检：阻断在非主干分支误触发发版
+            CURRENT_REF="${{ github.ref_name }}"
+            DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+            if [ -n "$DEFAULT_BRANCH" ] && [ "$CURRENT_REF" != "$DEFAULT_BRANCH" ]; then
+              echo "::error::禁止在非默认主干分支 [$CURRENT_REF] 触发发版！默认主干为 [$DEFAULT_BRANCH]，请切换至主干分支后重试。"
+              exit 1
+            elif [ -z "$DEFAULT_BRANCH" ] && [ "$CURRENT_REF" != "main" ] && [ "$CURRENT_REF" != "master" ]; then
+              echo "::error::禁止在非主干分支 [$CURRENT_REF] 触发发版！仅允许在 main 或 master 分支发版。"
+              exit 1
+            fi
+
             TAG_NAME="${{ inputs.version }}"
             if [[ "$TAG_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then TAG_NAME="v$TAG_NAME"; fi
             if ! echo "$TAG_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
-              echo "::error::版本号 [$TAG_NAME] 不符合语义化版本规范！"
+              echo "::error::版本号 [$TAG_NAME] 不符合语义化版本规范！必须形如 v1.0.0 或 v1.0.0-rc.1"
+              exit 1
+            fi
+            if git ls-remote --tags origin "refs/tags/$TAG_NAME" | grep -q "$TAG_NAME"; then
+              echo "::error::远程仓库已存在相同标签 [$TAG_NAME]，禁止重复发版！"
               exit 1
             fi
             git config user.name "github-actions[bot]"
@@ -102,6 +117,23 @@ jobs:
             git push origin "$TAG_NAME"
           else
             TAG_NAME="${{ github.ref_name }}"
+            # 语义化版本正则双重防呆：阻断非标原生标签误触发发版
+            if ! echo "$TAG_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
+              echo "::error::推送的标签 [$TAG_NAME] 不符合语义化版本规范！必须形如 v1.0.0 或 v1.0.0-rc.1，已安全终止发版流水线。"
+              exit 1
+            fi
+
+            # 标签直系祖先谱系校验 (Tag Lineage Guard)：确保 Tag 源自默认主干
+            DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+            DEFAULT_BRANCH="${DEFAULT_BRANCH:-main}"
+            git fetch origin "$DEFAULT_BRANCH"
+            TAG_COMMIT=$(git rev-parse HEAD)
+            if ! git merge-base --is-ancestor "$TAG_COMMIT" "origin/$DEFAULT_BRANCH"; then
+              echo "::error::安全熔断！标签 [$TAG_NAME] 指向的提交 [$TAG_COMMIT] 未合入默认主干分支 [$DEFAULT_BRANCH]！"
+              echo "::error::为防未经验证的代码随版本发布，严禁从任何未经合入的特性分支或孤立提交发版。"
+              exit 1
+            fi
+            echo "发版 Tag 谱系校验通过: 确认源自默认主干 [$DEFAULT_BRANCH]。"
           fi
 
           RAW_VERSION="${TAG_NAME#v}"
@@ -151,6 +183,7 @@ jobs:
     name: 发布 GitHub Release
     runs-on: ubuntu-latest
     needs: [build-artifacts]
+    if: always() && needs.build-artifacts.result == 'success'
     timeout-minutes: 10
     permissions:
       contents: write
@@ -196,7 +229,7 @@ jobs:
     name: 发布至 Maven Central
     runs-on: ubuntu-latest
     needs: [build-artifacts]
-    if: vars.ENABLE_MAVEN_PUBLISH == 'true'
+    if: (always() && needs.build-artifacts.result == 'success') && vars.ENABLE_MAVEN_PUBLISH == 'true'
     timeout-minutes: 20
     steps:
       - name: 检出源码
@@ -211,10 +244,16 @@ jobs:
           gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
           gpg-passphrase: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
 
-      - name: 发布构件至 Maven Central
+      - name: 发布构件至 Maven Central (支持 Sonatype Central Portal 与 GPG loopback)
+        # 💡 最佳实践避坑指引：
+        # 1. GPG 签名无 TTY：在 pom.xml 的 maven-gpg-plugin 中添加配置：
+        #    <configuration><gpgArguments><arg>--pinentry-mode</arg><arg>loopback</arg></gpgArguments></configuration>
+        # 2. Sonatype Central 校验等待策略：建议 central-publishing-maven-plugin 配置 <waitUntil>validated</waitUntil>
+        #    避免流水线长时间卡在等待全球 CDN 镜像网络 (repo1.maven.org) 同步 (可省 10~15 分钟 CI 配额)；
+        # 3. 多模块排除：对于 samples/demo 等非发布子模块，在其 pom.xml 中配置 <properties><maven.deploy.skip>true</maven.deploy.skip></properties>
         run: |
           mvn versions:set -DnewVersion=${{ needs.build-artifacts.outputs.raw_version }} -DgenerateBackupPoms=false
-          mvn clean deploy -DskipTests -B
+          mvn clean deploy -DskipTests -B -Dgpg.passphrase="${{ secrets.MAVEN_GPG_PASSPHRASE }}"
         env:
           CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
           CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
@@ -227,7 +266,7 @@ jobs:
     name: 构建并推送 Docker 镜像 (GHCR)
     runs-on: ubuntu-latest
     needs: [build-artifacts]
-    if: needs.build-artifacts.outputs.has_dockerfile == 'true'
+    if: (always() && needs.build-artifacts.result == 'success') && needs.build-artifacts.outputs.has_dockerfile == 'true'
     timeout-minutes: 25
     permissions:
       contents: read

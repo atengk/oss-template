@@ -131,6 +131,18 @@ jobs:
               echo "::error::推送的标签 [$TAG_NAME] 不符合语义化版本规范！必须形如 v1.0.0 或 v1.0.0-rc.1，已安全终止发版流水线。"
               exit 1
             fi
+
+            # 标签直系祖先谱系校验 (Tag Lineage Guard)：确保 Tag 源自默认主干
+            DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+            DEFAULT_BRANCH="${DEFAULT_BRANCH:-main}"
+            git fetch origin "$DEFAULT_BRANCH"
+            TAG_COMMIT=$(git rev-parse HEAD)
+            if ! git merge-base --is-ancestor "$TAG_COMMIT" "origin/$DEFAULT_BRANCH"; then
+              echo "::error::安全熔断！标签 [$TAG_NAME] 指向的提交 [$TAG_COMMIT] 未合入默认主干分支 [$DEFAULT_BRANCH]！"
+              echo "::error::为防未经验证的代码随版本发布，严禁从任何未经合入的特性分支或孤立提交发版。"
+              exit 1
+            fi
+            echo "发版 Tag 谱系校验通过: 确认源自默认主干 [$DEFAULT_BRANCH]。"
           fi
 
           RAW_VERSION="${TAG_NAME#v}"

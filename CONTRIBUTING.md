@@ -74,23 +74,31 @@ bash scripts/commit.sh
 ```bash
 # 标准规范化提交并自动推送 (推荐先显式精准暂存)
 git add <file-path>
-bash scripts/commit.sh -t feat -s core -m "新增用户认证能力" -p -y
+bash scripts/commit.sh -t feat -s core -m "新增用户认证能力" -l "支持多工单关联" -c "12, 13" -p -y
 
 # 修复 Bug 且不自动推送
 git add <file-path>
-bash scripts/commit.sh -t fix -s parser -m "修复空指针异常" -y
+bash scripts/commit.sh -t fix -s parser -m "修复空指针异常" -c 14 -y
 
 # 标记破坏性更新 (Breaking Changes)
 git add <file-path>
 bash scripts/commit.sh -t feat -s api -m "重构对外接口协议" -b -p -y
+
+# 空跑演练模式 (预览生成的提交信息与 Git Trailers，不实际执行提交与推送)
+bash scripts/commit.sh -t feat -s core -m "演练测试" -l "条目1" -c "12, 13" -n
 ```
 
 | 参数选项 | 说明 |
 | :--- | :--- |
 | `-t, --type <type>` | 提交类型 (`feat\|fix\|docs\|style\|refactor\|perf\|test\|build\|ci\|chore\|revert`) |
-| `-s, --scope <scope>` | 可选影响范围（如 `core`、`cli`、`api` 等） |
-| `-m, --message <msg>` | 提交主体描述（必填，简明扼要） |
+| `-s, --scope <scope>` | 可选影响范围（推荐: `core`、`cli`、`api`、`workflow`、`deps`、`docs`） |
+| `-m, --message <msg>` | 提交主体描述 / 标题（必填，简明扼要） |
+| `-l, --item <text>` | 详细改动条目说明（可多次传入，自动拼接为 Markdown 列表） |
+| `-d, --detail, --body <text>` | 详细正文描述段落（可与 `-l` 结合使用） |
+| `-c, --close, --closes <issues>` | 关联并自动关闭 GitHub Issue（支持单/多工单，如 `-c 12 -c 13` 或 `-c "12, 13"`，按行独立生成 `Closes #ID` Git Trailer） |
+| `-i, --issue, --ref, --refs <issues>` | 关联引用 GitHub Issue（格式同上，按行独立生成 `Refs #ID` Git Trailer） |
 | `-b, --breaking` | 标记为破坏性更新（自动追加 `!` 标识） |
+| `-n, --dry-run` | 空跑演练模式（仅打印提交信息组装预览与暂存状态，不执行提交与推送） |
 | `-a, --all` | 自动暂存全部已修改及未跟踪文件（相当于 `git add -A`，请谨慎使用） |
 | `-p, --push` | 提交成功后自动推送至当前分支远程仓库 |
 | `-y, --yes` | 跳过确认提示直接执行提交 |
@@ -100,8 +108,18 @@ bash scripts/commit.sh -t feat -s api -m "重构对外接口协议" -b -p -y
 
 ---
 
-## 3. Pull Request 流程
+## 3. Pull Request 与交付规范
 
+### 📝 特性即文档与单工单闭环门禁 (Doc-as-Feature & Per-Ticket Sync)
+为了杜绝“代码已合入但使用文档脱节、下游接入全凭猜”的现象，本项目推行**特性即文档**与**单工单文档准出闭环**准则：
+- **同工单/同提交交付**：任何新增功能、对外接口、关键配置改造，必须在同一个 Pull Request 与提交中同步更新相关文档与使用示例；
+- **三板斧质量标准**：
+  1. **一句话场景痛点**：清晰说明为什么需要该特性、解决了什么业务/工程问题；
+  2. **可直接运行的最小配置/代码用例**：提供复制即用的 YAML、Java、命令或示例代码；
+  3. **预期控制台/SQL/契约呈现**：明确展示标准调用或成功运行后的控制台输出、API 响应或数据落库形态。
+- **缺少文档与用例的代码改动，一律视为未达验收标准。**
+
+### 🔄 PR 流程与合并规约
 - **PR 标题规范**：PR 标题必须同样遵循 [Conventional Commits](#2-commit-提交信息规范) 格式（如 `feat: 新增能力` 或 `fix: 修复缺陷`），CI 会对其进行自动化合规校验；
 - **模版填写**：发起 PR 时，请按模版完整填写变更背景、解决的问题以及关联的 Issue（如 `close #12`）；
 - **CI 绿灯**：确保 CI 流水线测试全部处于通过状态；

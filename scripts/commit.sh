@@ -56,15 +56,25 @@ CLI_STAGE_ALL=false
 CLI_PUSH=false
 AUTO_CONFIRM=false
 IS_NON_INTERACTIVE=false
+DRY_RUN=false
+CLI_BODY=""
+CLI_ITEMS=()
+CLI_CLOSES=()
+CLI_REFS=()
 
 show_help() {
   printf "%b\n" "用法: bash scripts/commit.sh [选项]"
   printf "%b\n" ""
   printf "%b\n" "选项说明 (支持交互向导与非交互式/AI自动化调用):"
   printf "%b\n" "  -t, --type <type>       提交类型 (feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)"
-  printf "%b\n" "  -s, --scope <scope>     可选影响范围 (如 core, cli, api)"
-  printf "%b\n" "  -m, --message <msg>     提交描述 (必填，简明扼要)"
+  printf "%b\n" "  -s, --scope <scope>     可选影响范围 (推荐: core, cli, api, workflow, deps, docs)"
+  printf "%b\n" "  -m, --message <msg>     提交描述 / 标题 (必填，简明扼要)"
+  printf "%b\n" "  -l, --item <text>       详细改动条目说明 (可多次传入，自动拼接为 Markdown 列表)"
+  printf "%b\n" "  -d, --detail, --body <text> 详细正文描述 (可与 -l 结合使用)"
+  printf "%b\n" "  -c, --close, --closes <issues> 关联并自动关闭的 GitHub Issue (支持单个如 12、多个如 -c 12 -c 13 或逗号分隔 \"12, 13\")"
+  printf "%b\n" "  -i, --issue, --ref, --refs <issues> 仅关联引用的 GitHub Issue (支持格式同上)"
   printf "%b\n" "  -b, --breaking          标记为破坏性更新 (Breaking Changes，自动追加 !)"
+  printf "%b\n" "  -n, --dry-run           演练模式 (预览完整提交信息与暂存状态，不实际提交与推送)"
   printf "%b\n" "  -a, --all               自动暂存全部变动 (注意: 相当于 git add -A，请谨慎使用)"
   printf "%b\n" "  -p, --push              提交成功后自动推送到当前分支远程仓库"
   printf "%b\n" "  -y, --yes               跳过确认提示，直接执行提交"
@@ -75,7 +85,10 @@ show_help() {
   printf "%b\n" ""
   printf "%b\n" "非交互式调用示例 (推荐先精准 git add，再调用提交助手):"
   printf "%b\n" "  git add <file-path>"
-  printf "%b\n" "  bash scripts/commit.sh -t feat -s core -m \"实现新功能\" -p -y"
+  printf "%b\n" "  bash scripts/commit.sh -t feat -s core -m \"实现新功能\" -l \"支持多工单关联\" -c \"12, 13\" -p -y"
+  printf "%b\n" ""
+  printf "%b\n" "空跑演练预览示例 (不实际执行提交与推送):"
+  printf "%b\n" "  bash scripts/commit.sh -t fix -s parser -m \"修复解析异常\" -c 15 -n"
 }
 
 while [ $# -gt 0 ]; do
@@ -94,8 +107,42 @@ while [ $# -gt 0 ]; do
       IS_NON_INTERACTIVE=true
       shift 2
       ;;
+    -l|--item)
+      CLI_ITEMS+=("$2")
+      shift 2
+      ;;
+    -d|--detail|--body)
+      if [ -n "$CLI_BODY" ]; then
+        CLI_BODY="${CLI_BODY}"$'\n\n'"$2"
+      else
+        CLI_BODY="$2"
+      fi
+      shift 2
+      ;;
+    -c|--close|--closes)
+      for issue in $(echo "$2" | tr ',' ' '); do
+        clean_id=$(echo "$issue" | tr -d '#' | tr -d '[:space:]')
+        if [ -n "$clean_id" ]; then
+          CLI_CLOSES+=("$clean_id")
+        fi
+      done
+      shift 2
+      ;;
+    -i|--issue|--ref|--refs)
+      for issue in $(echo "$2" | tr ',' ' '); do
+        clean_id=$(echo "$issue" | tr -d '#' | tr -d '[:space:]')
+        if [ -n "$clean_id" ]; then
+          CLI_REFS+=("$clean_id")
+        fi
+      done
+      shift 2
+      ;;
     -b|--breaking)
       CLI_BREAKING=true
+      shift
+      ;;
+    -n|--dry-run)
+      DRY_RUN=true
       shift
       ;;
     -a|--all)
@@ -156,8 +203,12 @@ fi
 
 STATUS_OUTPUT=$(git status --porcelain)
 if [ -z "$STATUS_OUTPUT" ]; then
-  log_warn "当前工作区没有任何修改或未跟踪的文件，无需提交。"
-  exit 0
+  if [ "$DRY_RUN" = true ]; then
+    log_info "【演练模式】当前工作区无修改，继续执行提交信息组装预览..."
+  else
+    log_warn "当前工作区没有任何修改或未跟踪的文件，无需提交。"
+    exit 0
+  fi
 fi
 
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
@@ -166,9 +217,13 @@ CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 # 3. 暂存区检查与智能暂存 (先确认变动再撰写信息)
 # ==============================================================================
 if [ "$CLI_STAGE_ALL" = true ]; then
-  log_info "正在自动暂存当前所有改动 (git add -A)..."
-  git add -A
-elif [ "$IS_NON_INTERACTIVE" = false ]; then
+  if [ "$DRY_RUN" = true ]; then
+    log_info "【演练模式】模拟自动暂存全部变动 (git add -A)，跳过真实暂存..."
+  else
+    log_info "正在自动暂存当前所有改动 (git add -A)..."
+    git add -A
+  fi
+elif [ "$IS_NON_INTERACTIVE" = false ] && [ "$DRY_RUN" = false ]; then
   printf "\n%b\n" "${COLOR_BOLD}${COLOR_CYAN}================================================================${COLOR_RESET}"
   printf "%b\n" "${COLOR_BOLD}${COLOR_CYAN}         Conventional Commits 规范化提交助手                     ${COLOR_RESET}"
   printf "%b\n" "${COLOR_BOLD}${COLOR_CYAN}================================================================${COLOR_RESET}"
@@ -213,8 +268,12 @@ fi
 
 # 二次确认暂存区是否有内容
 if git diff --cached --quiet; then
-  log_error "暂存区无任何可提交的内容，请先使用 'git add' 暂存改动或传入 '-a' 参数。"
-  exit 1
+  if [ "$DRY_RUN" = true ]; then
+    log_info "【演练模式】暂存区目前为空，跳过暂存强制拦截。"
+  else
+    log_error "暂存区无任何可提交的内容，请先使用 'git add' 暂存改动或传入 '-a' 参数。"
+    exit 1
+  fi
 fi
 
 # ==============================================================================
@@ -314,6 +373,43 @@ else
       log_warn "提交描述不能为空，请重新输入。"
     fi
   done
+
+  # 收集详细改动明细条目列表
+  printf "\n%b请输入详细改动明细条目 (可选，每行一条，直接按回车结束):%b\n" "${COLOR_BOLD}" "${COLOR_RESET}"
+  ITEM_INDEX=1
+  while true; do
+    printf "  %b[%d]%b " "${COLOR_CYAN}" "$ITEM_INDEX" "${COLOR_RESET}"
+    read -r LINE_ITEM
+    LINE_ITEM=$(echo "$LINE_ITEM" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    if [ -z "$LINE_ITEM" ]; then
+      break
+    fi
+    CLI_ITEMS+=("$LINE_ITEM")
+    ITEM_INDEX=$((ITEM_INDEX + 1))
+  done
+
+  # 收集关联或关闭的 Issue
+  printf "\n%b请输入待关联或关闭的 GitHub Issue 编号 (可选，如 12 或 '12, 13'，直接回车跳过): %b" "${COLOR_BOLD}" "${COLOR_RESET}"
+  read -r ISSUE_INPUT
+  ISSUE_INPUT=$(echo "$ISSUE_INPUT" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+  if [ -n "$ISSUE_INPUT" ]; then
+    printf "%b该提交是否旨在解决并自动闭环所选 Issue? [Y/n]: %b" "${COLOR_BOLD}" "${COLOR_RESET}"
+    read -r IS_CLOSE_CHOICE
+    IS_CLOSE_CHOICE=$(echo "$IS_CLOSE_CHOICE" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    for raw_id in $(echo "$ISSUE_INPUT" | tr ',' ' '); do
+      clean_id=$(echo "$raw_id" | tr -d '#' | tr -d '[:space:]')
+      if [ -n "$clean_id" ]; then
+        case "$IS_CLOSE_CHOICE" in
+          [nN][oO]|[nN])
+            CLI_REFS+=("$clean_id")
+            ;;
+          *)
+            CLI_CLOSES+=("$clean_id")
+            ;;
+        esac
+      fi
+    done
+  fi
 fi
 
 # 拼装提交消息 Header
@@ -323,12 +419,96 @@ else
   COMMIT_HEADER="${TYPE}${BREAKING_FLAG}: ${SUBJECT}"
 fi
 
+# 拼装提交消息 Body 与 Git Trailers
+COMMIT_BODY=""
+if [ -n "$CLI_BODY" ]; then
+  COMMIT_BODY="$CLI_BODY"
+fi
+
+if [ ${#CLI_ITEMS[@]} -gt 0 ]; then
+  ITEMS_BLOCK=""
+  for item in "${CLI_ITEMS[@]}"; do
+    if [ -n "$ITEMS_BLOCK" ]; then
+      ITEMS_BLOCK="${ITEMS_BLOCK}"$'\n'"- ${item}"
+    else
+      ITEMS_BLOCK="- ${item}"
+    fi
+  done
+  if [ -n "$COMMIT_BODY" ]; then
+    COMMIT_BODY="${COMMIT_BODY}"$'\n\n'"${ITEMS_BLOCK}"
+  else
+    COMMIT_BODY="${ITEMS_BLOCK}"
+  fi
+fi
+
+# 拼装 Git Trailers (Closes 与 Refs，逐行独立，自动去重)
+TRAILERS_BLOCK=""
+
+UNIQUE_CLOSES=()
+for id in "${CLI_CLOSES[@]}"; do
+  already=false
+  for exist in "${UNIQUE_CLOSES[@]}"; do
+    if [ "$exist" = "$id" ]; then already=true; break; fi
+  done
+  if [ "$already" = false ]; then
+    UNIQUE_CLOSES+=("$id")
+  fi
+done
+
+for id in "${UNIQUE_CLOSES[@]}"; do
+  trailer="Closes #${id}"
+  if [ -n "$TRAILERS_BLOCK" ]; then
+    TRAILERS_BLOCK="${TRAILERS_BLOCK}"$'\n'"${trailer}"
+  else
+    TRAILERS_BLOCK="${trailer}"
+  fi
+done
+
+UNIQUE_REFS=()
+for id in "${CLI_REFS[@]}"; do
+  already=false
+  for exist in "${UNIQUE_CLOSES[@]}"; do
+    if [ "$exist" = "$id" ]; then already=true; break; fi
+  done
+  for exist in "${UNIQUE_REFS[@]}"; do
+    if [ "$exist" = "$id" ]; then already=true; break; fi
+  done
+  if [ "$already" = false ]; then
+    UNIQUE_REFS+=("$id")
+  fi
+done
+
+for id in "${UNIQUE_REFS[@]}"; do
+  trailer="Refs #${id}"
+  if [ -n "$TRAILERS_BLOCK" ]; then
+    TRAILERS_BLOCK="${TRAILERS_BLOCK}"$'\n'"${trailer}"
+  else
+    TRAILERS_BLOCK="${trailer}"
+  fi
+done
+
+if [ -n "$TRAILERS_BLOCK" ]; then
+  if [ -n "$COMMIT_BODY" ]; then
+    COMMIT_BODY="${COMMIT_BODY}"$'\n\n'"${TRAILERS_BLOCK}"
+  else
+    COMMIT_BODY="${TRAILERS_BLOCK}"
+  fi
+fi
+
 # ==============================================================================
 # 5. 预览与确认
 # ==============================================================================
 printf "\n%b\n" "${COLOR_BOLD}${COLOR_CYAN}------------------- 拟生成的提交信息预览 -------------------${COLOR_RESET}"
 printf "%b\n" "${COLOR_BOLD}${COLOR_GREEN}${COMMIT_HEADER}${COLOR_RESET}"
+if [ -n "$COMMIT_BODY" ]; then
+  printf "\n%b%s%b\n" "${COLOR_CYAN}" "$COMMIT_BODY" "${COLOR_RESET}"
+fi
 printf "%b\n\n" "${COLOR_BOLD}${COLOR_CYAN}------------------------------------------------------------${COLOR_RESET}"
+
+if [ "$DRY_RUN" = true ]; then
+  log_success "【演练模式 DRY-RUN】提交信息组装校验完成，未执行任何实际提交与推送。"
+  exit 0
+fi
 
 if [ "$AUTO_CONFIRM" = true ] || [ ! -t 0 ]; then
   log_info "已指定 -y 或处于非交互环境，跳过人工确认，直接执行提交。"
@@ -349,7 +529,11 @@ fi
 # ==============================================================================
 # 6. 执行 Git Commit
 # ==============================================================================
-git commit -m "$COMMIT_HEADER"
+if [ -n "$COMMIT_BODY" ]; then
+  git commit -m "$COMMIT_HEADER" -m "$COMMIT_BODY"
+else
+  git commit -m "$COMMIT_HEADER"
+fi
 log_success "代码提交成功！"
 
 # ==============================================================================
