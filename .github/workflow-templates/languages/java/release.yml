@@ -55,7 +55,7 @@ jobs:
 
       - name: 执行回归单元测试
         run: |
-          mvn clean test -B
+          mvn clean test -B -T 1C -nsu
           echo "✅ 发版前置质量门禁全部通过！"
 
   # ----------------------------------------------------------------------------
@@ -155,7 +155,7 @@ jobs:
       - name: 更新 pom.xml 版本并执行构建打包
         run: |
           mvn versions:set -DnewVersion=${{ steps.meta.outputs.raw_version }} -DgenerateBackupPoms=false
-          mvn clean package -DskipTests -B
+          mvn clean package -DskipTests -B -T 1C -nsu
           mkdir -p dist
           cp target/*.jar dist/ 2>/dev/null || true
           cd dist
@@ -251,9 +251,10 @@ jobs:
         # 2. Sonatype Central 校验等待策略：建议 central-publishing-maven-plugin 配置 <waitUntil>validated</waitUntil>
         #    避免流水线长时间卡在等待全球 CDN 镜像网络 (repo1.maven.org) 同步 (可省 10~15 分钟 CI 配额)；
         # 3. 多模块排除：对于 samples/demo 等非发布子模块，在其 pom.xml 中配置 <properties><maven.deploy.skip>true</maven.deploy.skip></properties>
+        # 4. 发布阶段单线程强防卫：显式锁定 -T 1 -nsu，100% 杜绝多模块并发上传 Central 的 GPG 签名竞争与暂存校验风险
         run: |
-          mvn versions:set -DnewVersion=${{ needs.build-artifacts.outputs.raw_version }} -DgenerateBackupPoms=false
-          mvn clean deploy -DskipTests -B -Dgpg.passphrase="${{ secrets.MAVEN_GPG_PASSPHRASE }}"
+          mvn versions:set -DnewVersion=${{ needs.build-artifacts.outputs.raw_version }} -DgenerateBackupPoms=false -T 1 -nsu
+          mvn clean deploy -DskipTests -B -T 1 -nsu -Dgpg.passphrase="${{ secrets.MAVEN_GPG_PASSPHRASE }}"
         env:
           CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
           CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
