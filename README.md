@@ -93,7 +93,8 @@
   > 2. 配置本地 Git 规范提交钩子：执行 git config core.hooksPath .githooks；
   > 3. 运行 bash scripts/setup.sh --clean -y 自动完成模版教学章节裁剪、清理 setup.sh 并创建初始提交（若偏好纯原生零脚本模式，可使用 --clean-all 一键彻底删除 scripts/ 目录）；
   > 4. 【技术栈流水线对齐】：下游业务项目必须参考并选用 .github/workflow-templates/languages/<lang>/ 下的二元模版（ci.yml 与 release.yml）覆盖至 .github/workflows/，以启用专属单测、打包与发版；严禁直接使用根目录默认工作流；
-  > 5. 【可选极简选项】：如果我不打算使用 scripts/ 目录下的辅助脚本，请同时将 scripts/ 目录完整物理删除（本项目完全支持纯原生 Git 与 GitHub Web 网页端零脚本开发）。
+  > 5. 【AI Agent 规范对齐】：从 .agents/templates/<lang>/AGENTS.md 复制对应技术栈规范覆盖至根目录 AGENTS.md（可选 universal、go、rust、java、python、vue、react、flutter）；
+  > 6. 【可选极简选项】：如果我不打算使用 scripts/ 目录下的辅助脚本，请同时将 scripts/ 目录完整物理删除（本项目完全支持纯原生 Git 与 GitHub Web 网页端零脚本开发）。
   > ```
 
 - **🛠️ 方式 B：使用内置向导脚本 (scripts/setup.sh)**
@@ -275,10 +276,66 @@ GitHub Actions 将会自动执行 [`.github/workflows/release.yml`](./.github/wo
 
 ---
 
+## 🤖 AI Agent 协作规范模版库 (AI Agent Templates)
+
+针对当下以 AI Agent（Claude Code、Cursor、Windsurf、Antigravity 等）为主力协作伙伴的现代研发范式，本项目在 [`.agents/templates/`](./.agents/templates/) 中内置了**工业级、防幻觉、开箱即用的多技术栈 AI Agent 行为准则与规约模板库**：
+
+| 技术栈 | 专属模版路径 | 核心管控与工程防线 |
+| :--- | :--- | :--- |
+| **通用基准** | [`.agents/templates/universal/AGENTS.md`](./.agents/templates/universal/AGENTS.md) | 交互交付、注释契约、空安全防御、Git 显式授权提交、工具链安全、零凭据脱敏、10 项自检清单 |
+| **Go** | [`.agents/templates/go/AGENTS.md`](./.agents/templates/go/AGENTS.md) | Go 1.22+，Goroutine 生命周期受控退出、`%w` 错误链与 `errors.Is`、生产零主动 panic、`cmd/internal/pkg` 结构、代差排斥清单 |
+| **Rust** | [`.agents/templates/rust/AGENTS.md`](./.agents/templates/rust/AGENTS.md) | Rust 2021 + Tokio，生产零裸 unwrap/expect、`?` 优雅错误传播、`tokio::sync::Mutex` 跨 await、spawn_blocking 隔离、Clippy 零警告 |
+| **Java** | [`.agents/templates/java/AGENTS.md`](./.agents/templates/java/AGENTS.md) | Spring Boot 3 + JDK 17/21，强制构造器注入、DTO/VO/Entity 模型物理隔离、`Result<T>` 统一包装、`jakarta.*` 命名空间、代差排斥清单 |
+| **Python** | [`.agents/templates/python/AGENTS.md`](./.agents/templates/python/AGENTS.md) | FastAPI + Pydantic v2 + Python 3.10+，现代联合类型（`X \| None`）、Pydantic v2 强契约、`async def` 异步非阻塞事件循环防线 |
+| **Vue 3** | [`.agents/templates/vue/AGENTS.md`](./.agents/templates/vue/AGENTS.md) | Vue 3 + TypeScript + Vite + TailwindCSS，强制 `<script setup lang="ts">`、泛型类型契约、Props 解构响应式安全、生命周期成对注销 |
+| **React** | [`.agents/templates/react/AGENTS.md`](./.agents/templates/react/AGENTS.md) | Next.js App Router + TypeScript + TailwindCSS，Server Components 优先、客户端组件下沉、Hooks 真实依赖（禁 eslint-disable）、不可变状态更新 |
+| **Flutter** | [`.agents/templates/flutter/AGENTS.md`](./.agents/templates/flutter/AGENTS.md) | Dart 3 + Flutter 3.x，异步裂隙守卫（`!context.mounted`）、控制器成对注销（`dispose`）、`const` 渲染优化、独立类拆解、零 `!` 强解包 |
+
+#### 🧩 可选高级工程扩展 (Extensions)
+针对大型系统工程或高可靠套件，可直接叠加使用：
+- [**`workflow-blueprint-spec-ticket.md`**](./.agents/templates/extensions/workflow-blueprint-spec-ticket.md)：**复杂任务推进范式**，严格规范“总纲蓝图 (Blueprint) ➔ 规格契约 (Spec) ➔ 工单切片 (Ticket)”三级演进流水线与双重人类确认门禁（Approval Gates）；
+- [**`quality-tested-docs.md`**](./.agents/templates/extensions/quality-tested-docs.md)：**文档工程与测试保真准则**，硬性落实“零未文档化功能”红线，以及“测试先行 ➔ 提炼主干 ➔ 剥离测试噪声 ➔ 规范生产调用”契约。
+
+### 🚀 快速选用指引 (一键覆盖至根目录)
+
+下游业务项目派生后，可直接通过单行命令将对应技术栈模板复制覆盖至根目录 `./AGENTS.md`：
+
+```bash
+# 1. 通用技术栈 (跨语言/任意项目)
+cp .agents/templates/universal/AGENTS.md ./AGENTS.md
+
+# 2. Go (Go 1.22+)
+cp .agents/templates/go/AGENTS.md ./AGENTS.md
+
+# 3. Rust (Rust 2021 + Tokio)
+cp .agents/templates/rust/AGENTS.md ./AGENTS.md
+
+# 4. Java (Spring Boot 3)
+cp .agents/templates/java/AGENTS.md ./AGENTS.md
+
+# 5. Python (FastAPI)
+cp .agents/templates/python/AGENTS.md ./AGENTS.md
+
+# 6. Vue 3 (TypeScript + Vite)
+cp .agents/templates/vue/AGENTS.md ./AGENTS.md
+
+# 7. React (Next.js App Router)
+cp .agents/templates/react/AGENTS.md ./AGENTS.md
+
+# 8. Flutter (Dart 3 移动端/跨平台)
+cp .agents/templates/flutter/AGENTS.md ./AGENTS.md
+```
+
+> 📖 **完整使用说明与 AI 提示词**：请参阅 [AI Agent 模版库指南 (.agents/templates/README.md)](./.agents/templates/README.md)。
+
+---
+
 ## 📂 仓库目录结构
 
 ```text
 .
+├── .agents/
+│   └── templates/                  # 工业级多技术栈 AI Agent 协作规范与行为准则模板库 (Universal/7大语言/2套高级扩展)
 ├── .github/
 │   ├── ISSUE_TEMPLATE/
 │   │   ├── bug_report.md           # Bug 缺陷反馈模版
