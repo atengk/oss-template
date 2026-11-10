@@ -76,6 +76,10 @@ bash scripts/commit.sh
 git add <file-path>
 bash scripts/commit.sh -t feat -s core -m "新增用户认证能力" -l "支持多工单关联" -c "12, 13" -p -y
 
+# 自动变基推送 (若远程存在更新，自动受控变基同步后推送)
+git add <file-path>
+bash scripts/commit.sh -t feat -s core -m "实现新功能" -p -y -r
+
 # 修复 Bug 且不自动推送
 git add <file-path>
 bash scripts/commit.sh -t fix -s parser -m "修复空指针异常" -c 14 -y
@@ -100,7 +104,8 @@ bash scripts/commit.sh -t feat -s core -m "演练测试" -l "条目1" -c "12, 13
 | `-b, --breaking` | 标记为破坏性更新（自动追加 `!` 标识） |
 | `-n, --dry-run` | 空跑演练模式（仅打印提交信息组装预览与暂存状态，不执行提交与推送） |
 | `-a, --all` | 自动暂存全部已修改及未跟踪文件（相当于 `git add -A`，请谨慎使用） |
-| `-p, --push` | 提交成功后自动推送至当前分支远程仓库 |
+| `-p, --push` | 提交成功后自动推送至当前分支远程仓库（内置 5 秒超时预检、全新分支 `-u` 上游自适应与并发竞态守卫） |
+| `-r, --rebase` | 当远程分支存在更新时，允许在提交后自动执行受控变基同步 (`git pull --rebase origin <branch>`)；变基遇冲突自动执行 `git rebase --abort` 原子回滚 |
 | `-y, --yes` | 跳过确认提示直接执行提交 |
 | `-h, --help` | 查看详细帮助说明 |
 

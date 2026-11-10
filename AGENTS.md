@@ -23,6 +23,7 @@
     Refs #14
     ```
   - **提交演练**：提交前可运行 `bash scripts/commit.sh -n` 预览校验生成的 Header、Body 与 Git Trailer。
+  - **推送与防拒守卫**：若需自动推送，追加 `-p -y`；若允许自动受控变基同步远端更新，显式追加 `-r/--rebase`（如 `bash scripts/commit.sh -t feat -s core -m "描述" -c 17 -p -y -r`）。
 
 ---
 

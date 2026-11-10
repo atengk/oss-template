@@ -33,7 +33,7 @@
 
 - 🎯 **技术栈纯净解耦**：无侵入式设计，不绑定任何特定语言运行时，保留统一的工程底座；
 - 🚀 **双通道自动化发版体系**：支持本地脚本驱动与云端网页调度（`workflow_dispatch`），打 Tag 自动触发发版、自动提取 PR/Commit 生成精美更新日志、自动挂载打包物附件；
-- 🛡️ **双重提交守门与工程脚本（人机协同兼顾）**：内置原生 Git 钩子 `.githooks/commit-msg`（零外部依赖守门 Conventional Commits）、规范提交助手 `scripts/commit.sh`、初始化向导 `scripts/setup.sh` 及发版防呆脚本 `scripts/release.sh`，全面支持交互式向导与静默参数（`-y`），既方便人工沉浸交互，又无缝兼容 AI Agent 与 CI 自动化调用；
+- 🛡️ **双重提交守门与工程脚本（人机协同兼顾）**：内置原生 Git 钩子 `.githooks/commit-msg`（零外部依赖守门 Conventional Commits）、规范提交助手 `scripts/commit.sh`（含远端前置预检、脏工作区防卫与原子自愈变基）、初始化向导 `scripts/setup.sh` 及发版防呆脚本 `scripts/release.sh`，全面支持交互式向导与静默参数（`-y`），既方便人工沉浸交互，又无缝兼容 AI Agent 与 CI 自动化调用；
 - 🔒 **工业级 CI/CD 权限加固与多生态依赖巡检**：遵循最小权限原则（Least Privilege）严格收敛流水线权限，预置主流包管理器（npm/Maven/pip/gomod/Cargo/Docker）Dependabot 自动化依赖安全巡检插槽；
 - 📦 **全场景分发体系预备**：内置 Maven Central (Portal)、npmjs、PyPI、Docker (GHCR) 以及 GoReleaser (CLI) 与 GitHub Pages (前端/文档) 等 6 大分发流水线参考与凭据规范；
 - 🧹 **极简整洁**：全仓库仅保留必需的核心工程规范与脚本，无冗余配置与第三方运行时负担。
@@ -351,7 +351,7 @@ cp .agents/templates/flutter/AGENTS.md ./AGENTS.md
 ├── .githooks/
 │   └── commit-msg                  # Git 原生提交规范守护钩子 (免外部依赖)
 ├── scripts/
-│   ├── commit.sh                   # 规范化提交助手 (支持交互向导与非交互式/AI自动化调用)
+│   ├── commit.sh                   # 规范化提交助手 (支持交互向导、非交互式/AI自动化调用与远端防拒守卫)
 │   ├── release.sh                  # 全生命周期发版防呆脚本 (含 Pre-flight 自检、回滚防御与生态插槽)
 │   └── setup.sh                    # 模版项目一键初始化向导 (自动替换占位符，支持人工与 AI 命令行调用)
 ├── .cliff.toml                     # git-cliff 变更日志提取与分类配置

@@ -66,11 +66,11 @@ log_success() {
 }
 
 log_warn() {
-  printf "%b[WARN]%b %s\n" "${COLOR_YELLOW}" "${COLOR_RESET}" "$1"
+  printf "%b[WARN]%b %s\n" "${COLOR_YELLOW}" "${COLOR_RESET}" "$1" >&2
 }
 
 log_error() {
-  printf "%b[ERROR]%b %s\n" "${COLOR_RED}" "${COLOR_RESET}" "$1"
+  printf "%b[ERROR]%b %s\n" "${COLOR_RED}" "${COLOR_RESET}" "$1" >&2
 }
 
 # 参数解析
@@ -164,10 +164,10 @@ if [ -n "$DIRTY_FILES" ]; then
 fi
 log_success "工作区状态检查通过: 干净无未提交代码"
 
-# 1.5 校验与远端仓库同步状态 (防漏拉远端代码与超前提交检测)
+# 1.5 校验与远端仓库同步状态 (防漏拉远端代码与超前提交检测，双重 5 秒超时守卫)
 log_info "正在拉取远端最新状态 (git fetch origin)..."
 AHEAD_COUNT=0
-if git fetch origin >/dev/null 2>&1; then
+if GIT_SSH_COMMAND="ssh -o ConnectTimeout=5 -o BatchMode=yes" git -c http.timeout=5 fetch origin >/dev/null 2>&1; then
   BEHIND_COUNT=$(git rev-list "HEAD..origin/$CURRENT_BRANCH" --count 2>/dev/null || echo "0")
   if [ "$BEHIND_COUNT" -gt 0 ]; then
     log_error "本地分支落后于远端 origin/$CURRENT_BRANCH ($BEHIND_COUNT 个提交未合并)！"
@@ -181,7 +181,7 @@ if git fetch origin >/dev/null 2>&1; then
     log_success "与远程分支状态同步: 本地主干与远端完全一致"
   fi
 else
-  log_warn "无法连接远程仓库进行同步校验（可能处于离线环境），跳过远端拉取校验。"
+  log_warn "无法连接远程仓库进行同步校验（可能处于离线环境或网络受阻），跳过远端拉取校验。"
 fi
 
 # ==============================================================================
@@ -280,7 +280,7 @@ if git rev-parse -q --verify "refs/tags/$TARGET_VERSION" >/dev/null 2>&1; then
   exit 1
 fi
 
-if git ls-remote --tags origin "refs/tags/$TARGET_VERSION" 2>/dev/null | grep -q "$TARGET_VERSION"; then
+if GIT_SSH_COMMAND="ssh -o ConnectTimeout=5 -o BatchMode=yes" git -c http.timeout=5 ls-remote --tags origin "refs/tags/$TARGET_VERSION" 2>/dev/null | grep -q "$TARGET_VERSION"; then
   log_error "远程仓库已存在相同标签 [$TARGET_VERSION]，禁止重复发版！"
   exit 1
 fi
