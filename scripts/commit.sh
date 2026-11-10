@@ -226,8 +226,6 @@ CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 REMOTE_CHECKED=false
 REMOTE_BRANCH_EXISTS=false
 BEHIND_COUNT=0
-AHEAD_COUNT=0
-FETCH_SUCCESS=false
 
 detect_remote_status() {
   local target_branch="$1"
@@ -241,18 +239,15 @@ detect_remote_status() {
   # 统一 5 秒超时守卫 (兼容 HTTPS 与 SSH 协议，禁止 SSH 交互按键挂起)
   if fetch_output=$(GIT_SSH_COMMAND="ssh -o ConnectTimeout=5 -o BatchMode=yes" \
       git -c http.timeout=5 fetch origin "$target_branch" 2>&1); then
-    FETCH_SUCCESS=true
     REMOTE_BRANCH_EXISTS=true
   else
     # 区分“远程分支尚不存在 (新分支)”与“网络超时/离线/无法连接”
     if echo "$fetch_output" | grep -Eq "(couldn't find remote ref|fatal: couldn't find remote ref|Remote branch .* not found)"; then
-      FETCH_SUCCESS=true
       REMOTE_BRANCH_EXISTS=false
       log_info "检测到远程仓库尚无对应分支 [origin/${target_branch}]，判定为全新分支。"
       REMOTE_CHECKED=true
       return 0
     else
-      FETCH_SUCCESS=false
       REMOTE_BRANCH_EXISTS=false
       log_warn "无法连接远程仓库进行同步校验（可能处于离线环境或网络受阻）: $(echo "$fetch_output" | head -n 1)"
       REMOTE_CHECKED=true
@@ -261,9 +256,8 @@ detect_remote_status() {
   fi
 
   REMOTE_CHECKED=true
-  # 精准计算落后与超前提交数
+  # 精准计算落后提交数
   BEHIND_COUNT=$(git rev-list "HEAD..origin/${target_branch}" --count 2>/dev/null || echo "0")
-  AHEAD_COUNT=$(git rev-list "origin/${target_branch}..HEAD" --count 2>/dev/null || echo "0")
   return 0
 }
 
